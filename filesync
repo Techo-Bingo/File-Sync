@@ -1,0 +1,153 @@
+#!/bin/bash
+# filesync启动脚本
+
+g_cur_dir=$(dirname $0)
+g_op_type=$1
+
+g_reload_flag=./run/reload.flag
+g_status_flag=./run/status.flag
+
+function prev_proc()
+{
+	if [ "$(whoami)" != 'ubp' ]
+	then
+		echo "please switch ubp" >&2
+		exit 1
+	fi
+
+	cd ${g_cur_dir}
+	g_abs_dir=$(pwd)
+}
+
+function get_running_pid()
+{
+	ps -ef|grep "${g_abs_dir}/filesync.pyc"|grep -v 'grep'|awk '{print $2}'
+}
+
+function get_inotify_pid()
+{
+	ps -ef|grep "inotifywait"|grep -v 'grep'|grep "fromfile ${g_abs_dir}/run/listen.ini"|awk '{print $2}'
+}
+
+function check_running()
+{
+	local cur_pid=$(get_running_pid)
+	if [ -z "${cur_pid}" ]
+	then
+		echo "filesync is not running" >&2
+		return 1
+	fi
+	return 0
+}
+
+function inotify_kill()
+{
+	local inotify_pid=$(get_inotify_pid)
+	[ -n "${inotify_pid}" ] && kill ${inotify_pid}
+	return 0
+}
+
+function filesync_start()
+{
+	local cur_pid=$(get_running_pid)
+	if [ -n "${cur_pid}" ]
+	then
+		echo "another filesync is runing, pid:${cur_pid}" >&2
+		return 2
+	fi
+
+	python ${g_abs_dir}/filesync.pyc >/dev/null &
+	return 0
+}
+
+function filesync_stop()
+{
+	inotify_kill
+
+	local cur_pid=$(get_running_pid)
+	if [ -n "${cur_pid}" ]
+	then
+		kill ${cur_pid}
+	fi
+
+	return 0
+}
+
+function filesync_restart()
+{
+	filesync_stop
+
+	filesync_start
+}
+
+function filesync_reload()
+{
+	inotify_kill
+
+	check_running || { return 3; }
+
+	touch ${g_reload_flag}
+
+	return 0
+}
+
+function filesync_status()
+{
+	check_running || { return 3; }
+
+    local loop=50
+    local times=0
+	touch ${g_status_flag}
+	> ${g_status_flag}.tmp
+
+	while true
+	do
+        if [ ${times} -ge ${loop} ]
+        then
+            return 1
+        fi
+        if [ -s ${g_status_flag}.tmp ]
+        then
+            cat ${g_status_flag}.tmp
+            return 0
+        fi
+        let times++
+        sleep 0.1
+	done
+
+	return 0
+}
+
+function main()
+{
+	prev_proc
+
+	if [ "${g_op_type}" = "start" ]
+	then
+		filesync_start
+	elif [ "${g_op_type}" = "stop" ]
+	then
+		filesync_stop
+	elif [ "${g_op_type}" = "restart" ]
+	then
+		filesync_restart
+	elif [ "${g_op_type}" = "reload" ]
+	then
+		filesync_reload
+	elif [ "${g_op_type}" = "status" ]
+	then
+		filesync_status
+	elif [ "${g_op_type}" = "check" ]
+	then
+	    check_running
+	else
+		echo "Not support ${g_op_type}" >&2
+		return 1
+	fi
+	return $?
+}
+
+main
+exit $?
+
+
