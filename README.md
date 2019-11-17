@@ -16,4 +16,4 @@ python3适配
 
 ***
 * inotify编译安装后适配路径
- * filesync.ini:inotify_path = /usr/local/inotify/bin/inotifywait
+  * filesync.ini:inotify_path = /usr/local/inotify/bin/inotifywait
