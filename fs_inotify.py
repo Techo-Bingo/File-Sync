@@ -87,13 +87,12 @@ class Inotify(Singleton):
 
     def _inotify_process(self, args=None):
         """ 开启inotifywait进程 """
-        inotify_cmd = "{0} -rmq " \
-                      "--format '%e %w%f' {1} " \
-                      "--fromfile {2}"\
-            .format(ConfigWrapper.get_key_value('inotify_path'),
-                    self.inotify_event,
-                    self.listen_file
-                    )
+        inotify_cmd = "{0} -rmq "\
+                      "--format '%e %w%f' {1} "\
+                      "--fromfile {2}".format(
+                      Global.G_INOTIFY_TOOL,
+                      self.inotify_event,
+                      self.listen_file)
 
         Logger.info("[fs_inotify] start %s" % inotify_cmd)
         self.inotify_process = subprocess.Popen([inotify_cmd],
@@ -101,15 +100,12 @@ class Inotify(Singleton):
                                                 stdout=subprocess.PIPE,
                                                 shell=True
                                                 )
-        """
-        性能优化：局部变量缓存，减少引用次数
-        """
         _proc_poll = self.inotify_process.poll
         _readline = self.inotify_process.stdout.readline
         _append = self.event_list.append
 
         while _proc_poll() is None:
-            event_line = _readline().strip()
+            event_line = Common.stream_2_str(_readline()).strip()
             if event_line != "":
                 _append(event_line)
 

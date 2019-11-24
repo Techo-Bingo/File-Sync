@@ -15,7 +15,7 @@ class Logger:
     @classmethod
     def init(cls, filepath):
         cls._log_file = filepath
-        cls._write_append('\n\n< Init FileSync >')
+        cls._write_append('< FileSync-Init >')
         Common.chown(filepath)
 
     @classmethod
@@ -61,25 +61,18 @@ class TruncLog(object):
     def init(self):
         #  初始化日志
         self.log_path = '%s/filesync-%s.log' % (Global.G_LOG_DIR, Common.get_pid())
-        log_level = FileOP.cat_file(Global.G_LOGLEVEL_INI).strip().lower()
         Logger.init(self.log_path)
-        if log_level in ['info', 'debug', 'error']:
-            Global.G_LOG_LEVEL = log_level
-        else:
-            Global.G_LOG_LEVEL = 'info'
-            Logger.warn("[filesync] Not support loglevel:%s, set to info"
-                        % log_level)
         # 启动日志回滚线程
-        MyThreading(func=self.rollback, period=Global.G_LOG_PERIOD).start()
+        MyThreading(func=self.rollback, period=Global.G_TRUNC_PERIOD).start()
 
     def trunk_log(self):
-        if FileOP.get_size(self.log_path) < Global.G_LOG_LIMIT:
+        if FileOP.get_size(self.log_path) < Global.G_MAX_SIZE:
             return
         Logger.info("[fs_logger] Trunk log: %s" % self.log_path)
         # 获取去除.log后的日志文件前缀
         name = '.'.join(self.log_path.split('.')[:-1])
         # 压缩当前进程日志并限制压缩包个数
-        Common.shell_cmd("mv {0} {0}.1 && > {0} && "
+        Common.shell_cmd("cp {0} {0}.1 && > {0} && "
                          "tar zcvf {1}_$(date +'%Y%m%d-%H%M').tar.gz {0}.1 && "
                          "rm {0}.1;ls -t {1}_*.tar.gz|sed -n '15,100p'|xargs rm -rf"
                          .format(self.log_path, name))

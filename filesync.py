@@ -21,7 +21,7 @@ from fs_inotify import Inotify
 from fs_master import Master
 from fs_data import ConfigData
 from fs_logger import Logger, TruncLog
-from fs_util import Common, FileOP, MyThreading
+from fs_util import Env, Common, FileOP, MyThreading
 
 
 class FileSync(object):
@@ -37,17 +37,6 @@ class FileSync(object):
         self.actor = None
         self.inotify = None
         self.master = None
-
-    @classmethod
-    def init_env(cls):
-        """ 初始化环境变量等 """
-        Global.G_LOCAL_DIR = Common.get_abspath('.')
-        Global.G_RUN_DIR = '%s/run' % Global.G_LOCAL_DIR
-        Global.G_RELOAD_FLAG = '%s/reload.flag' % Global.G_RUN_DIR
-        Global.G_STATUS_FLAG = '%s/status.flag' % Global.G_RUN_DIR
-        Common.mkdir(Global.G_LOG_DIR)
-        Common.mkdir(Global.G_RUN_DIR)
-        return True
 
     @classmethod
     def init_logger(cls):
@@ -106,12 +95,11 @@ class FileSync(object):
             self.status()
             FileOP.rm_file(Global.G_STATUS_FLAG)
 
-        log_level = FileOP.cat_file(Global.G_LOGLEVEL_INI).strip().lower()
-        if log_level in ['info', 'debug', 'error']:
-            if log_level == Global.G_LOG_LEVEL:
-                return
-            Global.G_LOG_LEVEL = log_level
-            Logger.info("[filesync] LogLevel changed to %s" % log_level)
+        log_level = Env.parse_log_level().lower()
+        if log_level == Global.G_LOG_LEVEL:
+            return
+        Global.G_LOG_LEVEL = log_level
+        Logger.info("[filesync] LogLevel changed to %s" % log_level)
 
     def status(self):
         """ 获取同步状态等信息 """
@@ -134,8 +122,7 @@ class FileSync(object):
 
     def start(self):
         """ 初始化启动 """
-        if not all([self.init_env(),
-                    self.init_logger(),
+        if not all([self.init_logger(),
                     self.init_config()]):
             return False
         return all([self.init_inotify(),
@@ -151,8 +138,10 @@ class FileSync(object):
 
 
 if __name__ == '__main__':
-    if not FileSync().start():
+    if not Env.init_env():
         sys.exit(1)
+    if not FileSync().start():
+        sys.exit(2)
     while True:
         time.sleep(10)
 

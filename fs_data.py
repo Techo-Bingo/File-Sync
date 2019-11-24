@@ -51,7 +51,7 @@ class ConfigData:
 
     @classmethod
     def _parsed_data(cls):
-        config_file = Global.G_CONF_FILE
+        config_file = Global.G_CONF_INI
 
         if not Common.is_file(config_file):
             raise ConfigError("%s is not exist !" % config_file)

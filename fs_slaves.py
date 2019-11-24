@@ -91,7 +91,7 @@ class Slaves(Singleton):
         if last:
             Logger.warn('[fs_slaves] %s in last config section %s' % (task, listen))
 
-        param = "rsync -a"
+        param = "%s -a" % Global.G_RSYNC_TOOL
         _get_listen_value = ConfigWrapper.get_key_value
         remote_ip = _get_listen_value('remote_ip', listen, last)
         checksum = _get_listen_value('checksum', listen, last)
@@ -161,10 +161,10 @@ class Slaves(Singleton):
             return
         # 0表示成功
         if not ret:
-            Logger.info("[thread%s] sync %s success, %s"
+            Logger.info("[thread%s] sync success %s, %s"
                         % (thread_id, task, detail))
         else:
-            info = "[thread%s] sync %s failed, %s" % (thread_id, task, detail)
+            info = "[thread%s] sync failed %s, %s" % (thread_id, task, detail)
             if is_retry:
                 Logger.error(info)
             else:
@@ -277,9 +277,9 @@ class Slaves(Singleton):
                     _tmp_ip.append(ip)
         """ IP列表写入临时文件并执行fping """
         ip_list_ini = "%s/ip_list.ini" % Global.G_RUN_DIR
+        check_cmd = "cat %s |sudo %s" % (ip_list_ini, Global.G_FPING_TOOL)
         FileOP.write_to_file(ip_list_ini, '\n'.join(_tmp_ip))
-        out_info = Common.shell_cmd("cat %s |sudo /usr/sbin/fping"
-                                    % ip_list_ini)[1]
+        out_info = Common.shell_cmd(check_cmd)[1]
         out_list = out_info.strip().split('\n')
         """ 保存正常连接的IP """
         for ip in _tmp_ip:

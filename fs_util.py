@@ -5,11 +5,16 @@
 本模块提供一些通用公共方法,通过第三方模块实现
 """
 import os
+import sys
 import pwd
 import time
 import threading
 import subprocess
-import ConfigParser
+import fs_global as Global
+if sys.version_info.major == 2:
+    import ConfigParser
+else:
+    import configparser as ConfigParser
 
 
 class Singleton(object):
@@ -42,6 +47,62 @@ def Counter(func):
             detail = "%s; (ret:%s, err:%s)" % (detail, ret, err)
         return ret, detail
     return wrapper
+
+
+class Env:
+    """ 环境处理类 """
+
+    @classmethod
+    def init_env(cls):
+        ini_dict = {}
+        ParserConfig(Global.G_ENV_INI).parse_to_dict(ini_dict)
+        try:
+            ini_dict = ini_dict['ENV']
+            for key in ['log_level',
+                        'log_dir',
+                        'max_log_size',
+                        'log_trunc_period',
+                        'rsync_user',
+                        'rsync_tool',
+                        'fping_tool',
+                        'inotify_tool']:
+                if key not in ini_dict:
+                    raise Exception("%s miss %s" % (Global.G_ENV_INI, key))
+                if not ini_dict[key]:
+                    raise Exception("%s is NULL" % key)
+            log_level = ini_dict['log_level']
+            Global.G_LOG_LEVEL = log_level if log_level in ['info', 'debug', 'error'] else 'info'
+            Global.G_LOG_DIR = ini_dict['log_dir']
+            Global.G_MAX_SIZE = int(ini_dict['max_log_size'])
+            Global.G_TRUNC_PERIOD = int(ini_dict['log_trunc_period'])
+            Global.G_RSYNC_USER = ini_dict['rsync_user']
+            rsync_tool = ini_dict['rsync_tool']
+            if not Common.is_file(rsync_tool):
+                raise Exception("%s is not a valid rsync tool" % rsync_tool)
+            Global.G_RSYNC_TOOL = rsync_tool
+            fping_tool = ini_dict['fping_tool']
+            if not Common.is_file(fping_tool):
+                raise Exception("%s is not a valid fping tool" % fping_tool)
+            Global.G_FPING_TOOL = fping_tool
+            inotify_tool = ini_dict['inotify_tool']
+            if not Common.is_file(inotify_tool):
+                raise Exception("%s is not a valid inotify tool" % inotify_tool)
+            Global.G_INOTIFY_TOOL = inotify_tool
+            Global.G_RUN_DIR = '%s/run' % Common.get_abspath('.')
+            Global.G_RELOAD_FLAG = '%s/reload.flag' % Global.G_RUN_DIR
+            Global.G_STATUS_FLAG = '%s/status.flag' % Global.G_RUN_DIR
+            Common.mkdir(Global.G_LOG_DIR)
+            Common.mkdir(Global.G_RUN_DIR)
+        except Exception as e:
+            sys.stderr.write("[fs_util] Exception: %s" % e)
+            return False
+        else:
+            return True
+
+    @classmethod
+    def parse_log_level(cls):
+        level = ParserConfig(Global.G_ENV_INI).get_value('ENV', 'log_level')
+        return level if level in ['info', 'debug', 'error'] else 'info'
 
 
 class Common:
@@ -90,8 +151,8 @@ class Common:
         return os.makedirs(dirpath)
 
     @classmethod
-    def chown(cls, filename, owner='ubp'):
-        uid, gid = pwd.getpwnam(owner)[2:4]
+    def chown(cls, filename):
+        uid, gid = pwd.getpwnam(Global.G_RSYNC_USER)[2:4]
         os.chown(filename, uid, gid)
 
     @classmethod
@@ -131,6 +192,13 @@ class Common:
         return os.path.commonprefix([file, directory]) == directory
 
     @classmethod
+    def stream_2_str(cls, in_ss):
+        if sys.version_info.major == 2:
+            return in_ss
+        else:
+            return str(in_ss, encoding='utf-8')
+
+    @classmethod
     def exec_ret(cls, cmd):
         return cls.shell_cmd(cmd)[0]
 
@@ -142,7 +210,7 @@ class Common:
                              stderr=subprocess.PIPE,
                              shell=True)
         out, err = p.communicate()
-        return p.returncode, out, err
+        return p.returncode, cls.stream_2_str(out), cls.stream_2_str(err)
 
 
 class FileOP:

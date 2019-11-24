@@ -1,27 +1,39 @@
 #!/bin/bash
 # filesync启动脚本
 
-g_cur_dir=$(dirname $0)
+cd $(dirname $0)
+g_abs_dir=$(pwd)
 g_op_type=$1
 
-g_reload_flag=./run/reload.flag
-g_status_flag=./run/status.flag
+g_env_ini=${g_abs_dir}/env.ini
+g_reload_flag=${g_abs_dir}/run/reload.flag
+g_status_flag=${g_abs_dir}/run/status.flag
+g_check_user='true'
+
+function get_env_var()
+{
+    local key=$1
+    grep -w "$key" ${g_env_ini}|cut -d "=" -f 2|tr -d ' ' 2>/dev/null
+}
 
 function prev_proc()
 {
-	if [ "$(whoami)" != 'ubp' ]
+	dos2unix ${g_env_ini} >/dev/null 2>&1
+	
+	if [ "${g_check_user}" = 'true' ]
 	then
-		echo "please switch ubp" >&2
-		exit 1
+		local rsync_user=$(get_env_var 'rsync_user')
+		if [ "$(whoami)" != "${rsync_user}" ]
+		then
+			echo "please switch to ${rsync_user}" >&2
+			exit 1
+		fi
 	fi
-
-	cd ${g_cur_dir}
-	g_abs_dir=$(pwd)
 }
 
 function get_running_pid()
 {
-	ps -ef|grep "${g_abs_dir}/filesync.pyc"|grep -v 'grep'|awk '{print $2}'
+	ps -ef|grep "${g_abs_dir}/filesync.py"|grep -v 'grep'|awk '{print $2}'
 }
 
 function get_inotify_pid()
@@ -56,7 +68,7 @@ function filesync_start()
 		return 2
 	fi
 
-	python ${g_abs_dir}/filesync.pyc >/dev/null &
+	python ${g_abs_dir}/filesync.py >/dev/null &
 	return 0
 }
 
