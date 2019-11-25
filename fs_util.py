@@ -11,7 +11,7 @@ import time
 import threading
 import subprocess
 import fs_global as Global
-if sys.version_info.major == 2:
+if sys.version_info[0] == 2:
     import ConfigParser
 else:
     import configparser as ConfigParser
@@ -193,7 +193,7 @@ class Common:
 
     @classmethod
     def stream_2_str(cls, in_ss):
-        if sys.version_info.major == 2:
+        if sys.version_info[0] == 2:
             return in_ss
         else:
             return str(in_ss, encoding='utf-8')
