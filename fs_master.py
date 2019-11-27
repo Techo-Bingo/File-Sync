@@ -12,7 +12,7 @@ from fs_logger import Logger
 from fs_slaves import Slaves
 from fs_message import Sender
 from fs_util import Singleton, Common
-from fs_data import ConfigWrapper, TaskQueue, RetryQueue
+from fs_data import ConfigWrapper, TaskQueue, RetryQueue, StateInfo
 
 
 class Master(Singleton):
@@ -21,10 +21,11 @@ class Master(Singleton):
         self.slaves = None
         self.thread_count = None
 
-    def init(self):
+    def steps(self):
         try:
             self.init_task()
-            self.init_handler()
+            self.handle_event()
+            self.slaves = Slaves(self.thread_count)
         except Exception as e:
             Logger.error(e)
             return False
@@ -39,30 +40,16 @@ class Master(Singleton):
         self.thread_count = count
 
         limit_size = int(ConfigWrapper.get_key_value('sync_queue_size'))
-
         TaskQueue.init(limit_size, count)
 
         limit_size = int(ConfigWrapper.get_key_value('fail_queue_size'))
-
         RetryQueue.init(limit_size)
 
-    def init_handler(self):
-        Common.start_thread(target=self.event_handler, args=())
-
-    def start(self):
-        if self.init():
-            self.slaves = Slaves(self.thread_count)
-            self.slaves.start()
-            return True
-        else:
-            return False
-
-    def status(self):
-        syncing, connect = self.slaves.status()
-        return syncing, connect, TaskQueue.status(), RetryQueue.status()
+    def handle_event(self):
+        Common.start_thread(target=self.parse_task, args=())
 
     @classmethod
-    def event_handler(cls, args=None):
+    def parse_task(cls, args=None):
         """
         事件处理函数
 
@@ -94,9 +81,22 @@ class Master(Singleton):
                     path = _dirname(path)
                 _push_task(path)
 
-            """
-            防止同一事件频繁同步，每次等待一段时间；
-            同步周期实时读取，防止reload修改后不生效
-            """
+            """ 防止同一事件频繁同步，每次等待一段时间 """
             time.sleep(int(_get_value('sync_period')))
+
+    def start(self):
+        self.slaves.start()
+
+    def status(self):
+        syncing, connect = self.slaves.status()
+        StateInfo.set_syncing_task(syncing)
+        StateInfo.set_connected_ip(connect)
+        StateInfo.set_waiting_task(TaskQueue.status())
+        StateInfo.set_retry_task(RetryQueue.status())
+
+    def pause(self):
+        self.slaves.pause()
+
+    def resume(self):
+        self.slaves.resume()
 

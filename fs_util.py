@@ -8,9 +8,12 @@ import os
 import sys
 import pwd
 import time
+import errno
+import atexit
+import signal
 import threading
 import subprocess
-import fs_global as Global
+from fs_message import Subscriber
 if sys.version_info[0] == 2:
     import ConfigParser
 else:
@@ -24,6 +27,41 @@ class Singleton(object):
         if not hasattr(cls, '_instance'):
             cls._instance = super(Singleton, cls).__new__(cls)
         return cls._instance
+
+    def signal_handler(self, sig):
+        eval('self.%s' % sig)()
+
+    def register_signal(self):
+        sub = Subscriber(self.__class__.__name__)
+        sub.register('SIGNAL', self.signal_handler)
+
+    def steps(self):
+        """ 子类重写此函数即可完成初始化步骤 """
+        return True
+
+    def init(self):
+        if not self.steps():
+            return False
+        self.register_signal()
+        return True
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def pause(self):
+        pass
+
+    def resume(self):
+        pass
+
+    def reload(self):
+        pass
+
+    def status(self):
+        pass
 
 
 def Counter(func):
@@ -49,62 +87,6 @@ def Counter(func):
     return wrapper
 
 
-class Env:
-    """ 环境处理类 """
-
-    @classmethod
-    def init_env(cls):
-        ini_dict = {}
-        ParserConfig(Global.G_ENV_INI).parse_to_dict(ini_dict)
-        try:
-            ini_dict = ini_dict['ENV']
-            for key in ['log_level',
-                        'log_dir',
-                        'max_log_size',
-                        'log_trunc_period',
-                        'rsync_user',
-                        'rsync_tool',
-                        'fping_tool',
-                        'inotify_tool']:
-                if key not in ini_dict:
-                    raise Exception("%s miss %s" % (Global.G_ENV_INI, key))
-                if not ini_dict[key]:
-                    raise Exception("%s is NULL" % key)
-            log_level = ini_dict['log_level']
-            Global.G_LOG_LEVEL = log_level if log_level in ['info', 'debug', 'error'] else 'info'
-            Global.G_LOG_DIR = ini_dict['log_dir']
-            Global.G_MAX_SIZE = int(ini_dict['max_log_size'])
-            Global.G_TRUNC_PERIOD = int(ini_dict['log_trunc_period'])
-            Global.G_RSYNC_USER = ini_dict['rsync_user']
-            rsync_tool = ini_dict['rsync_tool']
-            if not Common.is_file(rsync_tool):
-                raise Exception("%s is not a valid rsync tool" % rsync_tool)
-            Global.G_RSYNC_TOOL = rsync_tool
-            fping_tool = ini_dict['fping_tool']
-            if not Common.is_file(fping_tool):
-                raise Exception("%s is not a valid fping tool" % fping_tool)
-            Global.G_FPING_TOOL = fping_tool
-            inotify_tool = ini_dict['inotify_tool']
-            if not Common.is_file(inotify_tool):
-                raise Exception("%s is not a valid inotify tool" % inotify_tool)
-            Global.G_INOTIFY_TOOL = inotify_tool
-            Global.G_RUN_DIR = '%s/run' % Common.get_abspath('.')
-            Global.G_RELOAD_FLAG = '%s/reload.flag' % Global.G_RUN_DIR
-            Global.G_STATUS_FLAG = '%s/status.flag' % Global.G_RUN_DIR
-            Common.mkdir(Global.G_LOG_DIR)
-            Common.mkdir(Global.G_RUN_DIR)
-        except Exception as e:
-            sys.stderr.write("[fs_util] Exception: %s" % e)
-            return False
-        else:
-            return True
-
-    @classmethod
-    def parse_log_level(cls):
-        level = ParserConfig(Global.G_ENV_INI).get_value('ENV', 'log_level')
-        return level if level in ['info', 'debug', 'error'] else 'info'
-
-
 class Common:
     """ 公共方法 """
 
@@ -125,20 +107,6 @@ class Common:
         return os.getpid()
 
     @classmethod
-    def pid_running(cls, pid):
-        try:
-            os.kill(pid, 0)
-            return True
-        except OSError as e:
-            """ Operation not permitted (如ubp杀root)，说明有此PID """
-            if 1 == e.errno:
-                return True
-            """ No such process 无此pid """
-            if 3 == e.errno:
-                return False
-            return True
-
-    @classmethod
     def start_thread(cls, target, args=()):
         thread = threading.Thread(target=target, args=args)
         thread.setDaemon(True)
@@ -151,8 +119,8 @@ class Common:
         return os.makedirs(dirpath)
 
     @classmethod
-    def chown(cls, filename):
-        uid, gid = pwd.getpwnam(Global.G_RSYNC_USER)[2:4]
+    def chown(cls, filename, owner):
+        uid, gid = pwd.getpwnam(owner)[2:4]
         os.chown(filename, uid, gid)
 
     @classmethod
@@ -375,24 +343,118 @@ class ThreadPool(object):
         [_thread.resume() for _thread in self._thread_list]
 
 
-if __name__ == '__main__':
-    """ 本模块测试代码 """
-    def test_func(args):
-        seq, name = args
-        print('{} Thread{} name:{} is running'.format(time.time(), seq, name))
+class Daemon(object):
+    """ Daemon进程封装类  """
 
-    pool = ThreadPool(test_func, 2, args=('test',))
-    pool.init(5)
-    pool.start()
+    def __init__(self, pidfile, stdout, actions):
+        self.pidfile = pidfile
+        self.stdout = stdout
+        self.start_action = actions[0]
+        self.stop_action = actions[1]
+        self.pause_action = actions[2]
+        self.resume_action = actions[3]
+        self.reload_action = actions[4]
+        self.status_action = actions[5]
+        self.sig_pause = 10
+        self.sig_resume = 12
+        self.sig_reload = 30
+        self.sig_status = 31
 
-    time.sleep(20)
-    pool.pause()
+    def daemonize(self):
+        try:
+            if os.fork() > 0:
+                raise SystemExit(0)
+        except OSError as e:
+            raise RuntimeError("fork failed: %s\n" % e)
 
-    time.sleep(10)
-    pool.resume()
+        os.chdir('/')
+        os.setsid()
+        os.umask(0o22)
 
-    time.sleep(20)
-    pool.stop()
+        try:
+            if os.fork() > 0:
+                raise SystemExit(0)
+        except OSError as e:
+            raise RuntimeError("fork failed : %s\n" % e)
+
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        with open('/dev/null', 'r') as read:
+            os.dup2(read.fileno(), sys.stdin.fileno())
+        with open(self.stdout, 'w+') as write:
+            os.dup2(write.fileno(), sys.stdout.fileno())
+            os.dup2(write.fileno(), sys.stderr.fileno())
+
+        with open(self.pidfile, 'w') as f:
+            f.write(str(os.getpid()))
+        atexit.register(os.remove, self.pidfile)
+
+        # 注册信号处理回调函数
+        signal.signal(self.sig_pause, self.pause_action)
+        signal.signal(self.sig_resume, self.resume_action)
+        signal.signal(self.sig_reload, self.reload_action)
+        signal.signal(self.sig_status, self.status_action)
+
+    def send_signal(self, signum):
+        """
+        :param signum:  信号值
+        :return:
+            0： pid文件不存在，进程不存在
+            1： pid文件存在，pid进程存在
+            2： pid文件存在，pid进程不存在
+            3： pid文件存在，pid进程存在但无权限
+        """
+        if not os.path.isfile(self.pidfile):
+            return 0
+        with open(self.pidfile) as f:
+            pid = int(f.read())
+        try:
+            os.kill(pid, signum)
+            return 1
+        except OSError as e:
+            if e.errno == errno.ESRCH:  # No such process
+                sys.stderr.write("No such process, Daemon not running?")
+                return 2
+            elif e.errno == errno.EPERM:  # deny access to
+                sys.stderr.write("deny access to, Daemon running in root?")
+                return 3
+            else:
+                sys.stderr.write(str(e))
+                return 0
+
+    def start(self):
+        try:
+            # signal 0 探测pid对应进程是否存在
+            if self.send_signal(0) in [1, 3]:
+                raise RuntimeError("Already running.\n")
+            self.daemonize()
+        except RuntimeError as e:
+            sys.stderr.write(str(e))
+            raise SystemExit(1)
+        self.start_action()
+
+    def stop(self):
+        """ 先回调外部停止回调函数，再发送SIGTERM信号给pid """
+        self.stop_action()
+        if self.send_signal(signal.SIGTERM):
+            os.remove(self.pidfile)
+
+    def restart(self):
+        self.stop()
+        self.start()
+
+    def pause(self):
+        self.send_signal(self.sig_pause)
+
+    def resume(self):
+        self.send_signal(self.sig_resume)
+
+    def reload(self):
+        self.send_signal(self.sig_reload)
+
+    def status(self):
+        self.send_signal(self.sig_status)
 
 
 

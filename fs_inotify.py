@@ -12,7 +12,7 @@ from json import dumps
 import fs_global as Global
 from fs_util import FileOP, Common, Singleton
 from fs_logger import Logger
-from fs_data import ConfigWrapper
+from fs_data import ConfigWrapper, StateInfo
 from fs_message import Receiver
 
 
@@ -24,13 +24,13 @@ class Inotify(Singleton):
         self.inotify_process = None
         self.inotify_event = ''
 
-    def init(self):
+    def steps(self):
         """ 初始化配置文件和参数 """
         self.inotify_event = ''
         try:
             self.init_listen_file()
             self.init_inotify_event()
-            self.init_message()
+            self.register_event()
         except Exception as e:
             Logger.error(e)
             return False
@@ -49,9 +49,6 @@ class Inotify(Singleton):
         FileOP.write_to_file(self.listen_file, '')
         [FileOP.write_append_file(self.listen_file, line)
          for line in listen_list]
-
-    def init_message(self):
-        Receiver.bind(Global.G_INOTIFY_EVENT_MSGID, self._get_event_list)
 
     def init_inotify_event(self):
         """ 初始化inotifywait命令参数 """
@@ -82,6 +79,9 @@ class Inotify(Singleton):
             raise Exception("[fs_inotify] ALL event type is false")
         self.inotify_event += _event_param
 
+    def register_event(self):
+        Receiver.bind(Global.G_INOTIFY_EVENT_MSGID, self._get_event_list)
+
     def _get_event_list(self, param=None):
         return self.event_list
 
@@ -98,8 +98,7 @@ class Inotify(Singleton):
         self.inotify_process = subprocess.Popen([inotify_cmd],
                                                 bufsize=10240,
                                                 stdout=subprocess.PIPE,
-                                                shell=True
-                                                )
+                                                shell=True)
         _proc_poll = self.inotify_process.poll
         _readline = self.inotify_process.stdout.readline
         _append = self.event_list.append
@@ -109,29 +108,19 @@ class Inotify(Singleton):
             if event_line != "":
                 _append(event_line)
 
-    def start_inotify(self):
-        """ 开启一个线程获取事件 """
+    def start(self):
         Common.start_thread(target=self._inotify_process)
 
-    def start(self):
-        """ 初始化启动 """
-        if not self.init():
-            return False
-
-        self.start_inotify()
-        return True
+    def stop(self):
+        if self.inotify_process:
+            self.inotify_process.kill()
 
     def reload(self):
         """ 重新加载 """
-        try:
-            self.inotify_process.kill()
-        except:
-            pass
-        return self.start()
+        self.stop()
+        self.start()
 
     def status(self):
-        try:
-            pid = self.inotify_process.pid
-        except:
-            pid = -1
-        return pid
+        pid = self.inotify_process.pid if self.inotify_process else -1
+        StateInfo.set_inotify_pid(pid)
+

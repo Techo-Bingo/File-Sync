@@ -16,7 +16,7 @@ from fs_inotify import Inotify
 from fs_master import Master
 from fs_message import Publisher
 from fs_logger import Logger, LogTrunc
-from fs_data import EnvData, ConfigData, StateInfo
+from fs_data import EnvData, ConfigWrapper, ConfigData, StateInfo
 
 
 class FileSync(Daemon):
@@ -27,16 +27,13 @@ class FileSync(Daemon):
         2. 负责Inotify和Master类的启动和重加载
         3. 负责处理外部动态请求（事件）
     """
-    def run(self):
-        self.init()
-        Publisher.notify('SIGNAL', 'start')
-        self.mainloop()
 
     @classmethod
     def init(cls):
         if not all([Logger.init(),
                     LogTrunc.init(),
-                    ConfigData.init(),
+                    ConfigWrapper.init(),
+                    ConfigData().init(),
                     Inotify().init(),
                     Master().init(),
                     Monitor().init()]):
@@ -48,28 +45,35 @@ class FileSync(Daemon):
             time.sleep(10)
 
     @classmethod
-    def stop_callback(cls, signum, stack=None):
-        Logger.debug('Get signal %s' % signum)
+    def start_callback(cls):
+        cls.init()
+        Logger.info('[filesync] notify signal: start')
+        Publisher.notify('SIGNAL', 'start')
+        cls.mainloop()
+
+    @classmethod
+    def stop_callback(cls):
+        Logger.info('[filesync] notify signal: stop')
         Publisher.notify('SIGNAL', 'stop')
 
     @classmethod
     def pause_callback(cls, signum, stack=None):
-        Logger.debug('Get signal %s' % signum)
+        Logger.info('[filesync] notify signal(%s): pause' % signum)
         Publisher.notify('SIGNAL', 'pause')
 
     @classmethod
     def resume_callback(cls, signum, stack=None):
-        Logger.debug('Get signal %s' % signum)
+        Logger.info('[filesync] notify signal(%s): resume' % signum)
         Publisher.notify('SIGNAL', 'resume')
 
     @classmethod
     def reload_callback(cls, signum, stack=None):
-        Logger.debug('Get signal %s' % signum)
+        Logger.info('[filesync] notify signal(%s): reload' % signum)
         Publisher.notify('SIGNAL', 'reload')
 
     @classmethod
     def status_callback(cls, signum, stack=None):
-        Logger.debug('Get signal %s' % signum)
+        Logger.info('[filesync] notify signal(%s): status' % signum)
         Publisher.notify('SIGNAL', 'status')
         Logger.info(StateInfo.get_state_info())
 
@@ -85,7 +89,8 @@ if __name__ == '__main__':
         sys.stderr.write(err)
         sys.exit(2)
     # 定义信号处理回调函数
-    callback_funs = (FileSync.stop_callback,
+    callback_funs = (FileSync.start_callback,
+                     FileSync.stop_callback,
                      FileSync.pause_callback,
                      FileSync.resume_callback,
                      FileSync.reload_callback,

@@ -6,11 +6,11 @@
     1. 文件同步的配置文件数据；
     2. 过滤去重后的同步任务数据；
 """
-from json import dumps
 import fs_global as Global
-from fs_util import Common, ParserConfig
-from fs_logger import Logger
+from json import dumps
 from threading import Lock
+from fs_util import Singleton, Common, ParserConfig
+from fs_logger import Logger
 
 
 class ConfigError(Exception):
@@ -18,16 +18,80 @@ class ConfigError(Exception):
     pass
 
 
+class EnvData:
+    """ 系统环境数据类 """
+
+    @classmethod
+    def init(cls):
+        ini_dict = {}
+        cur_dir = Common.get_abspath('.')
+        Global.G_ENV_INI = '%s/%s' % (cur_dir, Global.G_ENV_INI)
+        Global.G_CONF_INI = '%s/%s' % (cur_dir, Global.G_CONF_INI)
+        Global.G_RUN_DIR = '%s/run' % cur_dir
+        Global.G_PID_FILE = '%s/filesync.pid' % Global.G_RUN_DIR
+        ParserConfig(Global.G_ENV_INI).parse_to_dict(ini_dict)
+        try:
+            ini_dict = ini_dict['ENV']
+            for key in ['log_level',
+                        'log_dir',
+                        'max_log_size',
+                        'log_trunc_period',
+                        'rsync_user',
+                        'rsync_tool',
+                        'fping_tool',
+                        'inotify_tool']:
+                if key not in ini_dict:
+                    raise Exception("%s miss %s" % (Global.G_ENV_INI, key))
+                if not ini_dict[key]:
+                    raise Exception("%s is NULL" % key)
+            log_level = ini_dict['log_level']
+            Global.G_LOG_LEVEL = log_level if log_level in ['info', 'debug', 'error'] else 'info'
+            Global.G_LOG_DIR = ini_dict['log_dir']
+            Global.G_LOG_FILE = '%s/filesync.log' % Global.G_LOG_DIR
+            Global.G_MAX_SIZE = int(ini_dict['max_log_size'])
+            Global.G_TRUNC_PERIOD = int(ini_dict['log_trunc_period'])
+            Global.G_RSYNC_USER = ini_dict['rsync_user']
+            rsync_tool = ini_dict['rsync_tool']
+            if not Common.is_file(rsync_tool):
+                raise Exception("%s is not a valid rsync tool" % rsync_tool)
+            Global.G_RSYNC_TOOL = rsync_tool
+            fping_tool = ini_dict['fping_tool']
+            if not Common.is_file(fping_tool):
+                raise Exception("%s is not a valid fping tool" % fping_tool)
+            Global.G_FPING_TOOL = fping_tool
+            inotify_tool = ini_dict['inotify_tool']
+            if not Common.is_file(inotify_tool):
+                raise Exception("%s is not a valid inotify tool" % inotify_tool)
+            Global.G_INOTIFY_TOOL = inotify_tool
+            Common.mkdir(Global.G_LOG_DIR)
+            Common.mkdir(Global.G_RUN_DIR)
+        except Exception as e:
+            return False, "EnvData Exception: %s" % e
+        else:
+            return True, None
+
+    @classmethod
+    def parse_log_level(cls):
+        level = ParserConfig(Global.G_ENV_INI).get_value('ENV', 'log_level')
+        return level if level in ['info', 'debug', 'error'] else 'info'
+
+
 class ConfigWrapper:
     """ 数据包装层 """
+    _config = None
+
+    @classmethod
+    def init(cls):
+        cls._config = ConfigData()
+        return True
 
     @classmethod
     def is_listen_file(cls, path):
-        return path in ConfigData.get_config_data()
+        return path in cls._config.get_config_data()
 
     @classmethod
     def get_listen_path(cls, last=False):
-        _data = ConfigData.get_config_data(last)
+        _data = cls._config.get_config_data(last)
         return [key for key in _data
                 if key not in ['GLOBAL',
                                '__GLOBAL_REQUIRED__',
@@ -36,7 +100,7 @@ class ConfigWrapper:
 
     @classmethod
     def get_key_value(cls, key, section='GLOBAL', last=False):
-        _data = ConfigData.get_config_data(last)
+        _data = cls._config.get_config_data(last)
         if section not in _data:
             return None
         if key not in _data[section]:
@@ -44,22 +108,58 @@ class ConfigWrapper:
         return _data[section][key]
 
 
-class ConfigData:
+class ConfigData(Singleton):
     """ filesync配置文件数据类 """
     _curr_config = {}
     _last_config = {}
 
-    @classmethod
-    def _parsed_data(cls):
+    def steps(self):
+        """ 初始化配置文件 """
+        self._curr_config = {}
+        try:
+            # 解析配置文件
+            self.parsed_data()
+            # 检查配置文件数据的正确性
+            self.check_data()
+        except ConfigError as e:
+            Logger.error('[fs_data] Exception: %s' % e)
+            return False
+        else:
+            # 转换成json字符串格式，提高日志可读性；
+            Logger.info('[fs_data] curr_config: %s' % dumps(self._curr_config,
+                                                            indent=4))
+            return True
+
+    def reload(self):
+        """
+        热加载配置文件
+
+        reload时保存上一次配置文件数据；
+        防止修改配置文件后之前的数据可能无法继续同步。
+
+        参数：None
+        返回值：bool值
+        """
+        self._last_config = self._curr_config
+        Logger.info('[fs_data] last_config: %s' % dumps(self._last_config,
+                                                        indent=4))
+        return self.steps()
+
+    def get_config_data(self, last=False):
+        if last:
+            return self._last_config
+        return self._curr_config
+
+    def parsed_data(self):
         config_file = Global.G_CONF_INI
 
         if not Common.is_file(config_file):
             raise ConfigError("%s is not exist !" % config_file)
 
         # 配置文件一次性解析到字典中
-        ParserConfig(config_file).parse_to_dict(cls._curr_config)
+        ParserConfig(config_file).parse_to_dict(self._curr_config)
 
-        if not cls._curr_config:
+        if not self._curr_config:
             raise ConfigError("parser %s failed" % config_file)
 
     @classmethod
@@ -87,8 +187,7 @@ class ConfigData:
                 return False
         return True
 
-    @classmethod
-    def _check_data(cls):
+    def check_data(self):
         """
         配置项元素核查
 
@@ -100,12 +199,12 @@ class ConfigData:
 
         返回值：None
         """
-        if 'GLOBAL' not in cls._curr_config:
+        if 'GLOBAL' not in self._curr_config:
             raise ConfigError("GLOBAL section not in config file")
 
         inner_type = ['str_type', 'int_type', 'bool_type']
         inner_keys = ['__GLOBAL_REQUIRED__', '__LISTEN_REQUIRED__']
-        listen_keys = [x for x in cls._curr_config if x not in inner_keys]
+        listen_keys = [x for x in self._curr_config if x not in inner_keys]
         listen_keys.remove('GLOBAL')
         if not listen_keys:
             raise ConfigError("listen path is NULL")
@@ -114,9 +213,9 @@ class ConfigData:
 
         """ 获取GLOBAL和监听目录各自元素的类型 """
         for inner in inner_keys:
-            if inner not in cls._curr_config:
+            if inner not in self._curr_config:
                 raise ConfigError("%s section not in config file" % inner)
-            tmp_maps = cls._curr_config[inner]
+            tmp_maps = self._curr_config[inner]
 
             if inner == '__GLOBAL_REQUIRED__':
                 check_data = global_required
@@ -133,11 +232,11 @@ class ConfigData:
         for types, check_keys in global_required.items():
             for key in check_keys:
                 # 判断必要元素是否存在
-                if key not in cls._curr_config['GLOBAL']:
+                if key not in self._curr_config['GLOBAL']:
                     raise ConfigError("%s option is not in GLOBAL" % key)
-                value = cls._curr_config['GLOBAL'][key]
+                value = self._curr_config['GLOBAL'][key]
                 # 判断对应元素是否满足类型要求
-                if not cls._check_type(value, types):
+                if not self._check_type(value, types):
                     raise ConfigError("%s of GLOBAL must be %s"
                                       % (key, types))
 
@@ -149,67 +248,23 @@ class ConfigData:
                     if not Common.is_exists(listen):
                         raise ConfigError("path of %s is not exist" % listen)
                     # 判断元素是否存在
-                    if key not in cls._curr_config[listen]:
+                    if key not in self._curr_config[listen]:
                         raise ConfigError("%s option is not in %s"
                                           % (key, listen))
-                    value = cls._curr_config[listen][key]
+                    value = self._curr_config[listen][key]
                     # 判断对应元素是否满足类型要求
-                    if not cls._check_type(value, types):
+                    if not self._check_type(value, types):
                         raise ConfigError("%s of %s must be %s"
                                           % (key, listen, types))
 
         """ 剔除内部核查数据 """
-        [cls._curr_config.pop(inner) for inner in inner_keys]
+        [self._curr_config.pop(inner) for inner in inner_keys]
 
         del inner_type
         del inner_keys
         del listen_keys
         del global_required
         del listen_required
-
-    @classmethod
-    def init_config(cls):
-        """ 初始化配置文件 """
-        cls._curr_config = {}
-        try:
-            # 解析配置文件
-            cls._parsed_data()
-
-            # 检查配置文件数据的正确性
-            cls._check_data()
-
-        except ConfigError as e:
-            Logger.error('[fs_data] Exception: %s' % e)
-            return False
-        else:
-            # 转换成json字符串格式，提高日志可读性；
-            Logger.info('[fs_data] curr_config: %s'
-                        % dumps(cls._curr_config, indent=4))
-            return True
-
-    @classmethod
-    def reload_config(cls):
-        """
-        热加载配置文件
-
-        reload时保存上一次配置文件数据；
-        防止修改配置文件后之前的数据可能无法继续同步。
-
-        参数：None
-
-        返回值：bool值
-        """
-        cls._last_config = cls._curr_config
-        Logger.info('[fs_data] last_config: %s'
-                    % dumps(cls._last_config, indent=4))
-
-        return cls.init_config()
-
-    @classmethod
-    def get_config_data(cls, last=False):
-        if last:
-            return cls._last_config
-        return cls._curr_config
 
 
 class TaskQueue:
@@ -305,4 +360,66 @@ class RetryQueue:
         out_task = cls._task_queue[:]
         cls._task_queue = []
         return out_task
+
+
+class StateInfo:
+    _inotify_pid = None
+    _connected_ip = None
+    _syncing_task = None
+    _waiting_task = None
+    _retry_task = None
+
+    @classmethod
+    def set_inotify_pid(cls, pid):
+        cls._inotify_pid = pid
+
+    @classmethod
+    def set_connected_ip(cls, ip_list):
+        cls._connected_ip = ip_list
+
+    @classmethod
+    def set_syncing_task(cls, task_list):
+        cls.syncing_task = task_list
+
+    @classmethod
+    def set_waiting_task(cls, task_list):
+        cls._waiting_task = task_list
+
+    @classmethod
+    def set_retry_task(cls, task_list):
+        cls._retry_task = task_list
+
+    @classmethod
+    def get_state_info(cls):
+        syncing_str = '\n\t' + '\n\t'.join(cls._syncing_task) if cls._syncing_task else 'None'
+        retry_str = '\n\t' + '\n\t'.join(cls._retry_task) if cls._retry_task else 'None'
+        status_info = """
+        [PIDS]
+         daemon pid: %s
+        inotify pid: %s
+        
+        [TASK-COUNT]
+        syncing: %s
+        waiting: %s
+          retry: %s
+        
+        [CONNECTED-IP]
+        %s
+        
+        [TASK-LIST]
+        syncing: %s
+          retry: %s
+        
+        [TASK-TOP]
+        %s
+        """ % (Common.get_pid(),
+               cls._inotify_pid,
+               len(cls._syncing_task) if cls._syncing_task else 0,
+               len(cls._waiting_task) if cls._waiting_task else 0,
+               len(cls._retry_task) if cls._retry_task else 0,
+               '\n'.join(cls._connected_ip) if cls._connected_ip else 'None',
+               syncing_str,
+               retry_str,
+               'TODO TOP-N')
+        return status_info
 

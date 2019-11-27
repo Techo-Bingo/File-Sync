@@ -10,20 +10,20 @@ class Logger:
     即开即写，日志回滚裁剪不影响日志写入
     写日志前对比一下当前日志级别，不符合时不记录相应的日志
     """
-    _log_file = None
 
     @classmethod
-    def init(cls, filepath):
-        cls._log_file = filepath
-        cls._write_append('< FileSync-Init >')
-        Common.chown(filepath)
+    def init(cls):
+        try:
+            cls._write_append('< FileSync-Init >')
+            Common.chown(Global.G_LOG_FILE, Global.G_RSYNC_USER)
+        except:
+            return False
+        return True
 
     @classmethod
     def _write_append(cls, info):
-        if not cls._log_file:
-            return False
         try:
-            with open(cls._log_file, 'a+') as f:
+            with open(Global.G_LOG_FILE, 'a+') as f:
                 f.write(info + '\n')
                 return True
         except OSError:
@@ -52,40 +52,39 @@ class Logger:
         cls._write_append('[DEBUG] %s: %s' % (Common.get_time(), info))
 
 
-class TruncLog(object):
+class LogTrunc:
     """ 日志裁剪回滚类 """
 
-    def __init__(self):
-        self.log_path = None
-
-    def init(self):
-        #  初始化日志
-        self.log_path = '%s/filesync-%s.log' % (Global.G_LOG_DIR, Common.get_pid())
-        Logger.init(self.log_path)
+    @classmethod
+    def init(cls):
         # 启动日志回滚线程
-        MyThreading(func=self.rollback, period=Global.G_TRUNC_PERIOD).start()
+        MyThreading(func=cls.rollback, period=Global.G_TRUNC_PERIOD).start()
+        return True
 
-    def trunk_log(self):
-        if FileOP.get_size(self.log_path) < Global.G_MAX_SIZE:
+    @classmethod
+    def trunk_log(cls):
+        if FileOP.get_size(Global.G_LOG_FILE) < Global.G_MAX_SIZE:
             return
-        Logger.info("[fs_logger] Trunk log: %s" % self.log_path)
+        Logger.info("[fs_logger] Trunk log: %s" % Global.G_LOG_FILE)
         # 获取去除.log后的日志文件前缀
-        name = '.'.join(self.log_path.split('.')[:-1])
+        name = '.'.join(Global.G_LOG_FILE.split('.')[:-1])
         # 压缩当前进程日志并限制压缩包个数
         Common.shell_cmd("cp {0} {0}.1 && > {0} && "
                          "tar zcvf {1}_$(date +'%Y%m%d-%H%M').tar.gz {0}.1 && "
                          "rm {0}.1;ls -t {1}_*.tar.gz|sed -n '15,100p'|xargs rm -rf"
-                         .format(self.log_path, name))
+                         .format(Global.G_LOG_FILE, name))
 
-    def keep_count(self):
+    @classmethod
+    def keep_count(cls):
         # TODO 如果日志对应pid的filesync正在运行，则不能删除该日志；
         # 当前需求中不可能超过10个文件同步同时运行，则先默认值保留10个.
         Common.shell_cmd("ls -t %s/*.log|sed -n '10,1000p'|xargs rm -rf"
                          % Global.G_LOG_DIR)
 
-    def rollback(self, args=None):
+    @classmethod
+    def rollback(cls, args=None):
         # 日志个数回滚
-        self.keep_count()
+        cls.keep_count()
         # 当前进程日志过大裁剪
-        self.trunk_log()
+        cls.trunk_log()
 

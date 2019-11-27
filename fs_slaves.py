@@ -37,6 +37,10 @@ class Slaves(Singleton):
         self.syncing = []
         self.ready_flag = False
 
+    def init(self):
+        """ 重写基类的init, 用于避免使用signal机制，统一由Master调度 """
+        pass
+
     def find_listen(self, task):
         """
         找到task对应配置文件中监听的目录
@@ -351,4 +355,10 @@ class Slaves(Singleton):
     def status(self):
         return self.syncing, self.connect_list
 
+    def pause(self):
+        if self.pool:
+            self.pool.pause()
 
+    def resume(self):
+        if self.pool:
+            self.pool.resume()
