@@ -2,29 +2,24 @@
 """
 文件同步入口
 
-本模块为文件同步的总入口，不能被其他模块引用。
-开发时请至少遵守如下PEP8风格：
-    1. 类命名使用大驼峰；
-    2. 函数命名使用内核风格；
-    3. 基本满足每行不超过80个字符；
-    4. 私有变量和函数使用_开头
-    5. 一块代码的注释使用三个"扩起
-    6. 一行代码的注释使用 #
+本模块为文件同步的启停入口，不能被其他模块引用。
 
 调用方式:
-    python filesync.py
+    python filesync.py [start|stop|restart|status|reload|pause|resume]
 """
 import sys
 import time
 import fs_global as Global
+from fs_util import Daemon
+from fs_monitor import Monitor
 from fs_inotify import Inotify
 from fs_master import Master
-from fs_data import ConfigData
-from fs_logger import Logger, TruncLog
-from fs_util import Env, Common, FileOP, MyThreading
+from fs_message import Publisher
+from fs_logger import Logger, LogTrunc
+from fs_data import EnvData, ConfigData, StateInfo
 
 
-class FileSync(object):
+class FileSync(Daemon):
     """
     文件同步控制类
     功能：
@@ -32,117 +27,89 @@ class FileSync(object):
         2. 负责Inotify和Master类的启动和重加载
         3. 负责处理外部动态请求（事件）
     """
-
-    def __init__(self):
-        self.actor = None
-        self.inotify = None
-        self.master = None
-
-    @classmethod
-    def init_logger(cls):
-        """ 初始化日志文件并启动日志回滚线程 """
-        TruncLog().init()
-        return True
+    def run(self):
+        self.init()
+        Publisher.notify('SIGNAL', 'start')
+        self.mainloop()
 
     @classmethod
-    def init_config(cls):
-        """ 初始化文件同步配置文件数据 """
-        return ConfigData.init_config()
+    def init(cls):
+        if not all([Logger.init(),
+                    LogTrunc.init(),
+                    ConfigData.init(),
+                    Inotify().init(),
+                    Master().init(),
+                    Monitor().init()]):
+            raise SystemExit(3)
 
     @classmethod
-    def reload_config(cls):
-        """ 重新加载配置文件数据 """
-        return ConfigData.reload_config()
+    def mainloop(cls):
+        while True:
+            time.sleep(10)
 
-    def init_inotify(self):
-        """ 初始化inotifywait """
-        self.inotify = Inotify()
-        return self.inotify.start()
+    @classmethod
+    def stop_callback(cls, signum, stack=None):
+        Logger.debug('Get signal %s' % signum)
+        Publisher.notify('SIGNAL', 'stop')
 
-    def reload_inotify(self):
-        """ 重新加载inotifywait """
-        return self.inotify.reload()
+    @classmethod
+    def pause_callback(cls, signum, stack=None):
+        Logger.debug('Get signal %s' % signum)
+        Publisher.notify('SIGNAL', 'pause')
 
-    def init_master(self):
-        """ 初始化事件过滤主线程 """
-        self.master = Master()
-        return self.master.start()
+    @classmethod
+    def resume_callback(cls, signum, stack=None):
+        Logger.debug('Get signal %s' % signum)
+        Publisher.notify('SIGNAL', 'resume')
 
-    def init_actor(self):
-        """ 处理外部请求事件 """
-        self.actor = MyThreading(func=self.action, period=1)
-        self.actor.start()
-        return True
+    @classmethod
+    def reload_callback(cls, signum, stack=None):
+        Logger.debug('Get signal %s' % signum)
+        Publisher.notify('SIGNAL', 'reload')
 
-    def action(self, args=None):
-        """
-        处理外部事件函数
-
-        根据外部事件标识以及日志级别等，
-        动态调整同步状态或输出同步状态信息
-
-        参数：None
-
-        输出：None
-        """
-        if Common.is_file(Global.G_RELOAD_FLAG):
-            Logger.info('[filesync] reload filesync start')
-            self.reload()
-            FileOP.rm_file(Global.G_RELOAD_FLAG)
-
-        if Common.is_file(Global.G_STATUS_FLAG):
-            Logger.info('[filesync] print filesync status')
-            self.status()
-            FileOP.rm_file(Global.G_STATUS_FLAG)
-
-        log_level = Env.parse_log_level().lower()
-        if log_level == Global.G_LOG_LEVEL:
-            return
-        Global.G_LOG_LEVEL = log_level
-        Logger.info("[filesync] LogLevel changed to %s" % log_level)
-
-    def status(self):
-        """ 获取同步状态等信息 """
-        syncing, connect, waiting, retry = self.master.status()
-        inotify_pid = self.inotify.status()
-        syncing_str = '\n\t'+'\n\t'.join(syncing) if syncing else ''
-        retry_str = '\n\t'+'\n\t'.join(retry) if retry else ''
-        status_info = Global.G_STATUS_INFO % (Common.get_pid(),
-                                              inotify_pid,
-                                              '\n'.join(connect),
-                                              len(syncing),
-                                              len(waiting),
-                                              len(retry),
-                                              syncing_str,
-                                              retry_str,
-                                              'TODO'
-                                              )
-        FileOP.write_to_file('%s.tmp' % Global.G_STATUS_FLAG, status_info)
-        Logger.info("[filesync] \n%s" % status_info)
-
-    def start(self):
-        """ 初始化启动 """
-        if not all([self.init_logger(),
-                    self.init_config()]):
-            return False
-        return all([self.init_inotify(),
-                    self.init_master(),
-                    self.init_actor()]
-                   )
-
-    def reload(self):
-        """ reload热加载配置文件 """
-        return all([self.reload_config(),
-                    self.reload_inotify()]
-                   )
+    @classmethod
+    def status_callback(cls, signum, stack=None):
+        Logger.debug('Get signal %s' % signum)
+        Publisher.notify('SIGNAL', 'status')
+        Logger.info(StateInfo.get_state_info())
 
 
 if __name__ == '__main__':
-    if not Env.init_env():
+    if len(sys.argv) != 2:
+        usage = "Usage: %s [start|stop|restart|status|reload|pause|resume]"
+        sys.stderr.write(usage)
         sys.exit(1)
-    if not FileSync().start():
+    # 初始化系统环境变量
+    result, err = EnvData.init()
+    if not result:
+        sys.stderr.write(err)
         sys.exit(2)
-    while True:
-        time.sleep(10)
+    # 定义信号处理回调函数
+    callback_funs = (FileSync.stop_callback,
+                     FileSync.pause_callback,
+                     FileSync.resume_callback,
+                     FileSync.reload_callback,
+                     FileSync.status_callback)
+    filesync = FileSync(Global.G_PID_FILE, Global.G_LOG_FILE, callback_funs)
+
+    op_type = sys.argv[1]
+    if op_type == 'start':
+        filesync.start()
+    elif op_type == 'stop':
+        filesync.stop()
+    elif op_type == 'restart':
+        filesync.restart()
+    elif op_type == 'status':
+        filesync.status()
+    elif op_type == 'pause':
+        filesync.pause()
+    elif op_type == 'resume':
+        filesync.resume()
+    elif op_type == 'reload':
+        filesync.reload()
+    else:
+        sys.stderr.write("Unknown command %s" % op_type)
+        sys.exit(4)
+
 
 
