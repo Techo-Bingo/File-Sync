@@ -360,6 +360,10 @@ class Daemon(object):
         self.sig_reload = 30
         self.sig_status = 31
 
+    @classmethod
+    def sys_err(cls, msg):
+        sys.stderr.write(str(msg)+'\n')
+
     def daemonize(self):
         try:
             if os.fork() > 0:
@@ -391,6 +395,7 @@ class Daemon(object):
         atexit.register(os.remove, self.pidfile)
 
         # 注册信号处理回调函数
+        signal.signal(signal.SIGTERM, self.stop_handle)
         signal.signal(self.sig_pause, self.pause_action)
         signal.signal(self.sig_resume, self.resume_action)
         signal.signal(self.sig_reload, self.reload_action)
@@ -414,14 +419,19 @@ class Daemon(object):
             return 1
         except OSError as e:
             if e.errno == errno.ESRCH:  # No such process
-                sys.stderr.write("No such process, Daemon not running?")
+                self.sys_err("No such process, Daemon not running?")
                 return 2
-            elif e.errno == errno.EPERM:  # deny access to
-                sys.stderr.write("deny access to, Daemon running in root?")
+            elif e.errno == errno.EPERM:  # Deny access to
+                self.sys_err("Deny access to, Daemon running in root?")
                 return 3
             else:
-                sys.stderr.write(str(e))
+                self.sys_err(e)
                 return 0
+
+    def stop_handle(self, signum, stack=None):
+        """ 接收到退出信号的动作 """
+        self.stop_action()
+        sys.exit(0)
 
     def start(self):
         try:
@@ -430,31 +440,41 @@ class Daemon(object):
                 raise RuntimeError("Already running.\n")
             self.daemonize()
         except RuntimeError as e:
-            sys.stderr.write(str(e))
+            self.sys_err(e)
             raise SystemExit(1)
         self.start_action()
 
     def stop(self):
-        """ 先回调外部停止回调函数，再发送SIGTERM信号给pid """
-        self.stop_action()
+        """ 发送SIGTERM信号给pid """
         if self.send_signal(signal.SIGTERM):
-            os.remove(self.pidfile)
+            try:
+                os.remove(self.pidfile)
+            except:
+                pass
 
     def restart(self):
         self.stop()
         self.start()
 
     def pause(self):
-        self.send_signal(self.sig_pause)
+        if self.send_signal(self.sig_pause) != 1:
+            self.sys_err('Not running or permission deny')
+            raise SystemExit(1)
 
     def resume(self):
-        self.send_signal(self.sig_resume)
+        if self.send_signal(self.sig_resume) != 1:
+            self.sys_err('Not running or permission deny')
+            raise SystemExit(1)
 
     def reload(self):
-        self.send_signal(self.sig_reload)
+        if self.send_signal(self.sig_reload) != 1:
+            self.sys_err('Not running or permission deny')
+            raise SystemExit(1)
 
     def status(self):
-        self.send_signal(self.sig_status)
+        if self.send_signal(self.sig_status) != 1:
+            self.sys_err('Not running or permission deny')
+            raise SystemExit(1)
 
 
 
