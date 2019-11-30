@@ -9,6 +9,7 @@ import sys
 import pwd
 import time
 import errno
+import getpass
 import atexit
 import signal
 import threading
@@ -137,6 +138,10 @@ class Common:
         p = re.compile("^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
                        "(25[0-5]|2[0-4]\d|[01]?\d\d?)$")
         return p.match(ip)
+
+    @classmethod
+    def user_match(cls, user_name):
+        return getpass.getuser() == user_name
 
     @classmethod
     def is_file(cls, filename):
@@ -466,7 +471,7 @@ class Daemon(object):
             self.sys_err('Not running or permission deny')
             raise SystemExit(1)
 
-    def reload(self):
+    def reload(self, param=None):
         if self.send_signal(self.sig_reload) != 1:
             self.sys_err('Not running or permission deny')
             raise SystemExit(1)
