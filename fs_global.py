@@ -17,3 +17,6 @@ G_RUN_DIR = ''
 G_STATUS_FLAG = ''
 G_RELOAD_FLAG = ''
 G_INOTIFY_EVENT_MSGID = 'inotify_event_message_id'
+G_RELOAD_MSGID = 'reload_message_id'
+G_MISS_LISTEN = set()
+
