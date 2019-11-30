@@ -118,7 +118,8 @@ class Inotify(Singleton):
     def reload(self):
         """ 重新加载 """
         self.stop()
-        self.start()
+        if self.steps():
+            self.start()
 
     def status(self):
         pid = self.inotify_process.pid if self.inotify_process else -1
