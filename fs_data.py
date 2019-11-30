@@ -51,6 +51,9 @@ class EnvData:
             Global.G_MAX_SIZE = int(ini_dict['max_log_size'])
             Global.G_TRUNC_PERIOD = int(ini_dict['log_trunc_period'])
             Global.G_RSYNC_USER = ini_dict['rsync_user']
+            # 以同步用户调用同步进程
+            if not Common.user_match(Global.G_RSYNC_USER):
+                raise Exception("please switch %s to continue" % Global.G_RSYNC_USER)
             rsync_tool = ini_dict['rsync_tool']
             if not Common.is_file(rsync_tool):
                 raise Exception("%s is not a valid rsync tool" % rsync_tool)
@@ -244,9 +247,6 @@ class ConfigData(Singleton):
         for types, check_keys in listen_required.items():
             for key in check_keys:
                 for listen in listen_keys:
-                    # 判断监听路径是否存在
-                    if not Common.is_exists(listen):
-                        raise ConfigError("path of %s is not exist" % listen)
                     # 判断元素是否存在
                     if key not in self._curr_config[listen]:
                         raise ConfigError("%s option is not in %s"
@@ -256,9 +256,17 @@ class ConfigData(Singleton):
                     if not self._check_type(value, types):
                         raise ConfigError("%s of %s must be %s"
                                           % (key, listen, types))
-
-        """ 剔除内部核查数据 """
+                    # 判断监听路径是否存在
+                    if not Common.is_exists(listen):
+                        # 先过滤，然后加入Monitor中动态监控，后续目录存在后自动reload
+                        if listen not in Global.G_MISS_LISTEN:
+                            Logger.warn("path of %s is not exist" % listen)
+                            Global.G_MISS_LISTEN.add(listen)
+                            continue
+        # 剔除内部核查数据
         [self._curr_config.pop(inner) for inner in inner_keys]
+        # 剔除目录不存在的监听项
+        [self._curr_config.pop(m) for m in Global.G_MISS_LISTEN]
 
         del inner_type
         del inner_keys
@@ -422,4 +430,6 @@ class StateInfo:
                retry_str,
                'TODO TOP-N')
         return status_info
+
+
 
