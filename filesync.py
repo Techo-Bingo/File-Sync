@@ -14,7 +14,7 @@ from fs_util import Daemon
 from fs_monitor import Monitor
 from fs_inotify import Inotify
 from fs_master import Master
-from fs_message import Publisher
+from fs_message import Publisher, Receiver
 from fs_logger import Logger, LogTrunc
 from fs_data import EnvData, ConfigWrapper, ConfigData, StateInfo
 
@@ -78,7 +78,7 @@ class FileSync(Daemon):
         Logger.info(StateInfo.get_state_info())
 
 
-if __name__ == '__main__':
+def main():
     if len(sys.argv) != 2:
         usage = "Usage: %s [start|stop|restart|status|reload|pause|resume]"
         sys.stderr.write(usage)
@@ -96,6 +96,8 @@ if __name__ == '__main__':
                      FileSync.reload_callback,
                      FileSync.status_callback)
     filesync = FileSync(Global.G_PID_FILE, Global.G_LOG_FILE, callback_funs)
+    # 绑定reload回调函数, fs_monitor模块中reload
+    Receiver.bind(Global.G_RELOAD_MSGID, filesync.reload)
 
     op_type = sys.argv[1]
     if op_type == 'start':
@@ -116,5 +118,9 @@ if __name__ == '__main__':
         sys.stderr.write("Unknown command %s" % op_type)
         sys.exit(4)
 
+
+if __name__ == '__main__':
+    main()
+    sys.exit(0)
 
 
