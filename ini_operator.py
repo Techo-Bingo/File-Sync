@@ -1,10 +1,10 @@
 # -*- coding: UTF-8 -*-
-
-import sys
 import os
-import ConfigParser
-# py3
-# import configparser as ConfigParser
+import sys
+if sys.version_info[0] == 2:
+    import ConfigParser
+else:
+    import configparser as ConfigParser
 
 
 def usage(oper=None):
@@ -15,7 +15,9 @@ def usage(oper=None):
             'get_value': 'python %s get_value <INIPATH> <SECTION> <OPTION>' % sys.argv[0],
             'set_value': 'python %s set_value <INIPATH> <SECTION> <OPTION> <VALUE>' % sys.argv[0]
             }
-    return _use[oper] if oper else _use
+    if oper:
+        return _use[oper]
+    return '\n'.join(list(_use.values()))
 
 
 def sys_err(msg):
