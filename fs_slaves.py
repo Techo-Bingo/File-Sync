@@ -95,13 +95,13 @@ class Slaves(Singleton):
         if last:
             Logger.warn('[fs_slaves] %s in last config section %s' % (task, listen))
 
-        param = "%s -a" % Global.G_RSYNC_TOOL
         _get_listen_value = ConfigWrapper.get_key_value
+        remote_mkdir = _get_listen_value('make_remote_dir', last=last)
         remote_ip = _get_listen_value('remote_ip', listen, last)
         checksum = _get_listen_value('checksum', listen, last)
         compress = _get_listen_value('compress', listen, last)
         exclude = _get_listen_value('exclude', listen, last)
-        # priority = _get_listen_value('priority', listen, last)
+        param = "%s -a" % Global.G_RSYNC_TOOL
 
         """ 判断IP是否可达 """
         if remote_ip not in self.connect_list:
@@ -124,7 +124,18 @@ class Slaves(Singleton):
                                                       remote_ip,
                                                       task_dir
                                                       )
-        return "cd %s && " % task_dir + param
+        # 如果full_sync为false或者其他场景下，同步可能会因对端的目录不存在而报错
+        # 这里根据make_remote_dir配置，判断是否先登录对端创建该目录，开启会影响同步性能
+        prev_cmd = None
+        if remote_mkdir == 'true':
+            prev_cmd = "ssh %s@%s 'mkdir -p %s'" % (Global.G_RSYNC_USER,
+                                                    remote_ip,
+                                                    task_dir
+                                                    )
+        cmd = "cd %s && " % task_dir + param
+        if prev_cmd:
+            cmd = ';'.join([prev_cmd, cmd])
+        return cmd
 
     @Counter
     def rsync(self, param):
