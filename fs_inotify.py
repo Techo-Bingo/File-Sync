@@ -112,7 +112,7 @@ class Inotify(Singleton):
         Common.start_thread(target=self._inotify_process)
 
     def stop(self):
-        if self.inotify_process:
+        if self.inotify_process.poll() is None:
             self.inotify_process.kill()
 
     def reload(self):
@@ -122,6 +122,9 @@ class Inotify(Singleton):
             self.start()
 
     def status(self):
-        pid = self.inotify_process.pid if self.inotify_process else -1
+        if self.inotify_process.poll() is None:
+            pid = self.inotify_process.pid
+        else:
+            pid = -1
         StateInfo.set_inotify_pid(pid)
 
