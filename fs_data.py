@@ -25,10 +25,10 @@ class EnvData:
     def init(cls):
         ini_dict = {}
         cur_dir = Common.get_abspath('.')
-        Global.G_ENV_INI = '%s/%s' % (cur_dir, Global.G_ENV_INI)
-        Global.G_CONF_INI = '%s/%s' % (cur_dir, Global.G_CONF_INI)
-        Global.G_RUN_DIR = '%s/run' % cur_dir
-        Global.G_PID_FILE = '%s/filesync.pid' % Global.G_RUN_DIR
+        Global.G_ENV_INI = Common.join_path(cur_dir, Global.G_ENV_INI)
+        Global.G_CONF_INI = Common.join_path(cur_dir, Global.G_CONF_INI)
+        Global.G_RUN_DIR = Common.join_path(cur_dir, 'run')
+        Global.G_PID_FILE = Common.join_path(Global.G_RUN_DIR, 'filesync.pid')
         ParserConfig(Global.G_ENV_INI).parse_to_dict(ini_dict)
         try:
             ini_dict = ini_dict['ENV']
@@ -47,8 +47,11 @@ class EnvData:
             log_level = ini_dict['log_level']
             Global.G_LOG_LEVEL = log_level if log_level in ['info', 'debug', 'error'] else 'info'
             Global.G_LOG_DIR = ini_dict['log_dir']
-            Global.G_LOG_FILE = '%s/filesync.log' % Global.G_LOG_DIR
+            if not Global.G_LOG_DIR.startswith('/'):
+                Global.G_LOG_DIR = Common.join_path(cur_dir, Global.G_LOG_DIR)
+            Global.G_LOG_FILE = Common.join_path(Global.G_LOG_DIR, 'filesync.log')
             Global.G_MAX_SIZE = int(ini_dict['max_log_size'])
+            Global.G_MAX_COUNT = int(ini_dict['max_log_count'])
             Global.G_TRUNC_PERIOD = int(ini_dict['log_trunc_period'])
             Global.G_RSYNC_USER = ini_dict['rsync_user']
             # 以同步用户调用同步进程
