@@ -133,6 +133,10 @@ class Common:
         return os.path.split(path)
 
     @classmethod
+    def join_path(cls, _path, path_):
+        return os.path.join(_path, path_)
+
+    @classmethod
     def is_ip(cls, ip):
         import re
         p = re.compile("^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
