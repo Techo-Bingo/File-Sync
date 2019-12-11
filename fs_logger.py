@@ -22,12 +22,7 @@ class Logger:
 
     @classmethod
     def _write_append(cls, info):
-        try:
-            with open(Global.G_LOG_FILE, 'a+') as f:
-                f.write(info + '\n')
-                return True
-        except OSError:
-            return False
+        FileOP.write_append_file(Global.G_LOG_FILE, info)
 
     @classmethod
     def info(cls, info):
