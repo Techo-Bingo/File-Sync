@@ -85,6 +85,16 @@ class Inotify(Singleton):
     def _get_event_list(self, param=None):
         return self.event_list
 
+    def _get_inotify_pid(self):
+        try:
+            if self.inotify_process.poll() is None:
+                pid = self.inotify_process.pid
+            else:
+                pid = -1
+        except:
+            pid = -1
+        return pid
+
     def _inotify_process(self, args=None):
         """ 开启inotifywait进程 """
         inotify_cmd = "{0} -rmq "\
@@ -99,6 +109,8 @@ class Inotify(Singleton):
                                                 bufsize=10240,
                                                 stdout=subprocess.PIPE,
                                                 shell=True)
+        Logger.info("[fs_inotify] filesync pid: %s" % Common.get_pid())
+        Logger.info("[fs_inotify] inotifywait pid: %s" % self._get_inotify_pid())
         _proc_poll = self.inotify_process.poll
         _readline = self.inotify_process.stdout.readline
         _append = self.event_list.append
@@ -112,8 +124,11 @@ class Inotify(Singleton):
         Common.start_thread(target=self._inotify_process)
 
     def stop(self):
-        if self.inotify_process.poll() is None:
-            self.inotify_process.kill()
+        try:
+            if self.inotify_process.poll() is None:
+                self.inotify_process.kill()
+        except:
+            pass
 
     def reload(self):
         """ 重新加载 """
@@ -122,9 +137,6 @@ class Inotify(Singleton):
             self.start()
 
     def status(self):
-        if self.inotify_process.poll() is None:
-            pid = self.inotify_process.pid
-        else:
-            pid = -1
+        pid = self._get_inotify_pid()
         StateInfo.set_inotify_pid(pid)
 
