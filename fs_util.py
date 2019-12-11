@@ -92,8 +92,8 @@ class Common:
     """ 公共方法 """
 
     @classmethod
-    def get_abspath(cls, path):
-        return os.path.abspath(path)
+    def get_abspath(cls):
+        return os.path.abspath(os.path.split(__file__)[0])
 
     @classmethod
     def get_time(cls):
@@ -395,7 +395,7 @@ class Daemon(object):
 
         with open('/dev/null', 'r') as read:
             os.dup2(read.fileno(), sys.stdin.fileno())
-        with open(self.stdout, 'w+') as write:
+        with open(self.stdout, 'a+') as write:
             os.dup2(write.fileno(), sys.stdout.fileno())
             os.dup2(write.fileno(), sys.stderr.fileno())
 
