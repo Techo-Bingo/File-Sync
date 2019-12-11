@@ -24,7 +24,7 @@ class EnvData:
     @classmethod
     def init(cls):
         ini_dict = {}
-        cur_dir = Common.get_abspath('.')
+        cur_dir = Common.get_abspath()
         Global.G_ENV_INI = Common.join_path(cur_dir, Global.G_ENV_INI)
         Global.G_CONF_INI = Common.join_path(cur_dir, Global.G_CONF_INI)
         Global.G_RUN_DIR = Common.join_path(cur_dir, 'run')
