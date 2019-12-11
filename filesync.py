@@ -37,6 +37,7 @@ class FileSync(Daemon):
                     Inotify().init(),
                     Master().init(),
                     Monitor().init()]):
+            Logger.error('[filesync] FileSync init failed')
             raise SystemExit(3)
 
     @classmethod
