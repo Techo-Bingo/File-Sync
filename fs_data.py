@@ -390,7 +390,7 @@ class StateInfo:
 
     @classmethod
     def set_syncing_task(cls, task_list):
-        cls.syncing_task = task_list
+        cls._syncing_task = task_list
 
     @classmethod
     def set_waiting_task(cls, task_list):
