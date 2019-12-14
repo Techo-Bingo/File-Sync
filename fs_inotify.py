@@ -81,9 +81,15 @@ class Inotify(Singleton):
 
     def register_event(self):
         Receiver.bind(Global.G_INOTIFY_EVENT_MSGID, self._get_event_list)
+        Receiver.bind(Global.G_INOTIFY_HEARTBEAT_MSGID, self._heartbeat)
 
     def _get_event_list(self, param=None):
         return self.event_list
+
+    def _heartbeat(self, param=None):
+        if self._get_inotify_pid() != -1:
+            return True
+        return False
 
     def _get_inotify_pid(self):
         try:
