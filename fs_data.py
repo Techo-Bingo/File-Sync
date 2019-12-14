@@ -208,6 +208,7 @@ class ConfigData(Singleton):
         if 'GLOBAL' not in self._curr_config:
             raise ConfigError("GLOBAL section not in config file")
 
+        Global.G_MISS_LISTEN.clear()
         inner_type = ['str_type', 'int_type', 'bool_type']
         inner_keys = ['__GLOBAL_REQUIRED__', '__LISTEN_REQUIRED__']
         listen_keys = [x for x in self._curr_config if x not in inner_keys]
@@ -402,8 +403,6 @@ class StateInfo:
 
     @classmethod
     def get_state_info(cls):
-        syncing_str = '\n\t' + '\n\t'.join(cls._syncing_task) if cls._syncing_task else 'None'
-        retry_str = '\n\t' + '\n\t'.join(cls._retry_task) if cls._retry_task else 'None'
         status_info = """
         [PIDS]
          daemon pid: %s
@@ -414,24 +413,22 @@ class StateInfo:
         waiting: %s
           retry: %s
         
-        [CONNECTED-IP]
-        %s
-        
         [TASK-LIST]
         syncing: %s
           retry: %s
-        
-        [TASK-TOP]
-        %s
+
+        [OTHER]
+        connected-ip: %s
+        missing-path: %s
         """ % (Common.get_pid(),
                cls._inotify_pid,
                len(cls._syncing_task) if cls._syncing_task else 0,
                len(cls._waiting_task) if cls._waiting_task else 0,
                len(cls._retry_task) if cls._retry_task else 0,
-               '\n'.join(cls._connected_ip) if cls._connected_ip else 'None',
-               syncing_str,
-               retry_str,
-               'TODO TOP-N')
+               cls._syncing_task,
+               cls._retry_task,
+               cls._connected_ip,
+               list(Global.G_MISS_LISTEN))
         return status_info
 
 
