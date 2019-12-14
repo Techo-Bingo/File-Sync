@@ -6,7 +6,7 @@
     1. 初始化并启动Slaves线程池管理类，
     2. 定时从inotify事件中解析事件到任务到队列中
 """
-import time
+from time import sleep
 import fs_global as Global
 from fs_logger import Logger
 from fs_slaves import Slaves
@@ -82,7 +82,7 @@ class Master(Singleton):
                 _push_task(path)
 
             """ 防止同一事件频繁同步，每次等待一段时间 """
-            time.sleep(int(_get_value('sync_period')))
+            sleep(int(_get_value('sync_period')))
 
     def start(self):
         self.slaves.start()
