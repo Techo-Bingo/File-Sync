@@ -9,12 +9,11 @@ from fs_util import Singleton, MyThreading, Common
 class Monitor(Singleton):
 
     def __init__(self):
-        pass
+        self.max_fail = 2
+        self.fail_count = 0
 
-    # def steps(self):  # monitor暂时不用接受signal, 先覆盖基类init
-    def init(self):
-        MyThreading(func=self.monitor, period=1).start()
-        return True
+    def start(self):
+        MyThreading(func=self.monitor, behind=True, period=2).start()
 
     def monitor(self, args=None):
         # 监控日志级别
@@ -32,7 +31,16 @@ class Monitor(Singleton):
             reload_switch = True
         if reload_switch:
             Logger.info('[fs_monitor] send signal reload')
-            # 清空集合， 因为reload动作会重新载入和设置该集合
-            Global.G_MISS_LISTEN.clear()
             Sender.send(Global.G_RELOAD_MSGID)
+            return
 
+        # 监控inotify进程状态
+        if not Sender.send(Global.G_INOTIFY_HEARTBEAT_MSGID):
+            self.fail_count += 1
+            if self.fail_count < self.max_fail:
+                Logger.warn('[fs_monitor] inotify heartbeat lost, times %s'
+                            % self.fail_count)
+            else:
+                Logger.info("[fs_monitor] inotify heartbeat failed, reload")
+                Sender.send(Global.G_RELOAD_MSGID)
+                return
