@@ -290,9 +290,10 @@ class MyThreading(threading.Thread):
     MyThreading.stop()   停止线程
     """
 
-    def __init__(self, func, period=10, args=()):
+    def __init__(self, func, behind=False, period=10, args=()):
         super(MyThreading, self).__init__()
         self.func = func
+        self.behind = behind
         self.period = period
         self.args = args
         self.daemon = True
@@ -308,8 +309,12 @@ class MyThreading(threading.Thread):
 
         while _run_flag():
             _pause_wait()
-            self.func(self.args)
-            _sleep(self.period)
+            if self.behind:
+                _sleep(self.period)
+                self.func(self.args)
+            else:
+                self.func(self.args)
+                _sleep(self.period)
 
     def pause(self):
         self._pause_flag.clear()
@@ -401,7 +406,7 @@ class Daemon(object):
 
         with open(self.pidfile, 'w') as f:
             f.write(str(os.getpid()))
-        atexit.register(os.remove, self.pidfile)
+        atexit.register(FileOP.rm_file, self.pidfile)
 
         # 注册信号处理回调函数
         signal.signal(signal.SIGTERM, self.stop_handle)
@@ -456,13 +461,12 @@ class Daemon(object):
     def stop(self):
         """ 发送SIGTERM信号给pid """
         if self.send_signal(signal.SIGTERM):
-            try:
-                os.remove(self.pidfile)
-            except:
-                pass
+            FileOP.rm_file(self.pidfile)
 
     def restart(self):
         self.stop()
+        # 给signal handler留点时间
+        time.sleep(0.1)
         self.start()
 
     def pause(self):
