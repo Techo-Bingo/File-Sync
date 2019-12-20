@@ -130,8 +130,10 @@ class Inotify(Singleton):
         Common.start_thread(target=self._inotify_process)
 
     def stop(self):
+        Logger.info("[fs_inotify] handle signal stop")
         try:
             if self.inotify_process.poll() is None:
+                Logger.info("[fs_inotify] kill pid: %s" % self.inotify_process.pid)
                 self.inotify_process.kill()
         except:
             pass
