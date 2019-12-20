@@ -10,7 +10,7 @@
 import sys
 import time
 import fs_global as Global
-from fs_util import Daemon
+from fs_util import Common, Daemon
 from fs_monitor import Monitor
 from fs_inotify import Inotify
 from fs_master import Master
@@ -56,6 +56,7 @@ class FileSync(Daemon):
     def stop_callback(cls):
         Logger.info('[filesync] notify signal: stop')
         Publisher.notify('SIGNAL', 'stop')
+        Logger.info('[filesync] filesync(%s) exit' % Common.get_pid())
 
     @classmethod
     def pause_callback(cls, signum, stack=None):
