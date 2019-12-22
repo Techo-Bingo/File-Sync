@@ -24,8 +24,7 @@ class FileSync(Daemon):
     文件同步控制类
     功能：
         1. 负责环境初始化；
-        2. 负责Inotify和Master类的启动和重加载
-        3. 负责处理外部动态请求（事件）
+        2. 负责定义启停等事件的回调函数
     """
 
     @classmethod
@@ -90,7 +89,7 @@ def main():
     if not result:
         sys.stderr.write(err)
         sys.exit(2)
-    # 定义信号处理回调函数
+    # 设置信号处理回调函数
     callback_funs = (FileSync.start_callback,
                      FileSync.stop_callback,
                      FileSync.pause_callback,

@@ -2,9 +2,11 @@
 """
 数据管理模块
 
-本模块包括两种数据：
-    1. 文件同步的配置文件数据；
-    2. 过滤去重后的同步任务数据；
+本模块包括的数据：
+    1. 文件同步主配置文件数据
+    2. 待同步任务数据
+    3. 重传任务数据
+    4. 状态数据
 """
 import fs_global as Global
 from json import dumps
@@ -115,7 +117,7 @@ class ConfigWrapper:
 
 
 class ConfigData(Singleton):
-    """ filesync配置文件数据类 """
+    """ 同步主配置文件数据类 """
     _curr_config = {}
     _last_config = {}
 

@@ -2,10 +2,10 @@
 """
 Inotifywait事件监听模块
 
-本模块负责：
+本模块功能：
     1. inotifywait进程的创建，该进程持续监听配置文件中指定
         文件或目录的变化事件（写关闭、修改、删除、移动、修改权限等）；
-    2. 把收集的事件交由Master模块处理，生成对应的同步任务。
+    2. 把收集的事件发送出去由其他（Master）模块处理。
 """
 import subprocess
 from json import dumps

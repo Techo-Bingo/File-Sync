@@ -7,6 +7,14 @@ from fs_util import Singleton, MyThreading, Common
 
 
 class Monitor(Singleton):
+    """
+    状态监控类
+
+    负责动态监控：
+        1. 日志级别变更
+        2. 缺失的监听目录
+        3. inotifywait子进程状态
+    """
 
     def __init__(self):
         self.max_fail = 2

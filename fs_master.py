@@ -2,9 +2,9 @@
 """
 事件过滤处理模块
 
-本模块负责：
+本模块功能：
     1. 初始化并启动Slaves线程池管理类，
-    2. 定时从inotify事件中解析事件到任务到队列中
+    2. 定时从inotify消息队列中解析事件到任务到队列
 """
 from time import sleep
 import fs_global as Global

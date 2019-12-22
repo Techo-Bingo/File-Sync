@@ -1,4 +1,9 @@
 # -*- coding: UTF-8 -*-
+"""
+全局变量模块
+"""
+__author__ = 'Bingo'
+
 G_ENV_INI = 'env.ini'
 G_CONF_INI = 'filesync.ini'
 G_LOG_FILE = ''
