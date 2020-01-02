@@ -114,7 +114,11 @@ class Slaves(Singleton):
             param += 'z'
 
         if exclude:
-            param += ' --exclude={%s}' % exclude
+            # 只有一个过滤条件时，不能用{}，否则过滤会失效
+            if len(exclude.split(',')) == 1:
+                param += ' --exclude=%s' % exclude
+            else:
+                param += ' --exclude={%s}' % exclude
 
         # 注：任务可能是文件也可能是目录
         # 统一取上一层目录，进入后同步
