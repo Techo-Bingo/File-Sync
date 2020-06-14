@@ -12,6 +12,13 @@ from collections import defaultdict
 
 class _Intermedia:
     """ 一对多模式 """
+    # 本软件（filesync）中刚好是按照：
+    # ConfigData
+    # Inotify
+    # Master
+    # Monitor
+    # 这种顺序先手调用，否则不能使用defaultdict
+    # 因为reload动作中，Master依赖ConfigData先完成
     messages = defaultdict(dict)
 
     @classmethod

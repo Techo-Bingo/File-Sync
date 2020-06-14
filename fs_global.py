@@ -25,4 +25,4 @@ G_INOTIFY_EVENT_MSGID = 'inotify_event_message_id'
 G_INOTIFY_HEARTBEAT_MSGID = 'inotify_heartbeat_message_id'
 G_RELOAD_MSGID = 'reload_message_id'
 G_MISS_LISTEN = set()
-
+G_APPEAR_LISTEN = set()

@@ -94,6 +94,14 @@ class Master(Singleton):
         StateInfo.set_waiting_task(TaskQueue.status())
         StateInfo.set_retry_task(RetryQueue.status())
 
+    def reload(self):
+        """
+        reload之前不存在的监听目录在reload之后存在，
+        则此目录需要加入任务队列 
+        """
+        Logger.info("[fs_master] appear listen: %s" % Global.G_APPEAR_LISTEN)
+        [TaskQueue.push_task(path) for path in Global.G_APPEAR_LISTEN]
+
     def pause(self):
         self.slaves.pause()
 

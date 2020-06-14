@@ -134,8 +134,7 @@ class ConfigData(Singleton):
             return False
         else:
             # 转换成json字符串格式，提高日志可读性；
-            Logger.info('[fs_data] curr_config: %s' % dumps(self._curr_config,
-                                                            indent=4))
+            Logger.info('[fs_data] curr_config: %s' % dumps(self._curr_config, indent=4))
             return True
 
     def reload(self):
@@ -149,9 +148,13 @@ class ConfigData(Singleton):
         返回值：bool值
         """
         self._last_config = self._curr_config
-        Logger.info('[fs_data] last_config: %s' % dumps(self._last_config,
-                                                        indent=4))
-        return self.steps()
+        Logger.info('[fs_data] last_config: %s' % dumps(self._last_config, indent=4))
+
+        _prev_miss_listen = Global.G_MISS_LISTEN.copy()
+        _ret = self.steps()
+
+        Global.G_APPEAR_LISTEN = _prev_miss_listen - Global.G_MISS_LISTEN
+        return _ret
 
     def get_config_data(self, last=False):
         if last:
