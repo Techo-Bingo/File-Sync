@@ -17,7 +17,7 @@ class _Intermedia:
     # Inotify
     # Master
     # Monitor
-    # 这种顺序先手调用，否则不能使用defaultdict
+    # 这种顺序先后调用，否则不能使用defaultdict
     # 因为reload动作中，Master依赖ConfigData先完成
     messages = defaultdict(dict)
 
