@@ -192,7 +192,13 @@ class ConfigData(Singleton):
             return False
         elif types == 'int_type':
             try:
-                if int(value) < 0:
+                if int(value) <= 0:
+                    return False
+            except:
+                return False
+        elif types == 'float_type':
+            try:
+                if float(value) < 0:
                     return False
             except:
                 return False
