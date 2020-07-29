@@ -98,10 +98,7 @@ class Common:
     @classmethod
     def get_time(cls):
         ct = time.time()
-        return '%s.%03d' \
-               % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                  (ct - int(ct)) * 1000
-                  )
+        return '%s.%03d' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), (ct - int(ct)) * 1000)
 
     @classmethod
     def get_pid(cls):
