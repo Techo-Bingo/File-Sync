@@ -82,7 +82,7 @@ class Master(Singleton):
                 _push_task(path)
 
             """ 防止同一事件频繁同步，每次等待一段时间 """
-            sleep(int(_get_value('sync_period')))
+            sleep(float(_get_value('sync_period')))
 
     def start(self):
         self.slaves.start()
