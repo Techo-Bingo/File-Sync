@@ -71,7 +71,7 @@ class Slaves(Singleton):
                 return listen, True
         return None, None
 
-    def combine(self, task):
+    def combine(self, thread_id, task):
         """
         组合rsync同步参数
 
@@ -93,26 +93,21 @@ class Slaves(Singleton):
             raise ErrorExcept("not in config ini, ignore...")
 
         if last:
-            Logger.warn('[fs_slaves] %s in last config section %s' % (task, listen))
+            Logger.warn('[thread%s] %s in last config section %s' % (thread_id, task, listen))
 
         _get_listen_value = ConfigWrapper.get_key_value
         remote_mkdir = _get_listen_value('make_remote_dir', last=last)
-        remote_ip = _get_listen_value('remote_ip', listen, last)
+        remote_ips = _get_listen_value('remote_ip', listen, last).split(',')
         checksum = _get_listen_value('checksum', listen, last)
         compress = _get_listen_value('compress', listen, last)
         exclude = _get_listen_value('exclude', listen, last)
         param = "%s -a" % Global.G_RSYNC_TOOL
-
-        """ 判断IP是否可达 """
-        if remote_ip not in self.connect_list:
-            raise ErrorExcept("%s is unavailable IP" % remote_ip)
+        task_dir, task_file = Common.split_path(task)
 
         if checksum == 'true':
             param += 'c'
-
         if compress == 'true':
             param += 'z'
-
         if exclude:
             # 只有一个过滤条件时，不能用{}，否则过滤会失效
             if len(exclude.split(',')) == 1:
@@ -120,44 +115,41 @@ class Slaves(Singleton):
             else:
                 param += ' --exclude={%s}' % exclude
 
-        # 注：任务可能是文件也可能是目录
-        # 统一取上一层目录，进入后同步
-        task_dir, task_file = Common.split_path(task)
-        param += " --delete --rsh=ssh %s %s@%s:%s" % (task_file,
-                                                      Global.G_RSYNC_USER,
-                                                      remote_ip,
-                                                      task_dir
-                                                      )
-        # 如果full_sync为false或者其他场景下，同步可能会因对端的目录不存在而报错
-        # 这里根据make_remote_dir配置，判断是否先登录对端创建该目录，开启会影响同步性能
-        prev_cmd = None
-        if remote_mkdir == 'true':
-            prev_cmd = "ssh %s@%s 'mkdir -p %s'" % (Global.G_RSYNC_USER,
-                                                    remote_ip,
-                                                    task_dir
-                                                    )
-        cmd = "cd %s && " % task_dir + param
-        if prev_cmd:
-            cmd = ';'.join([prev_cmd, cmd])
-        return cmd
+        cmd_dict = {}
+        """ 判断IP是否可达 """
+        for remote_ip in remote_ips:
+            if remote_ip not in self.connect_list:
+                Logger.warn("[thread%s] %s is unavailable IP, ignore %s" % (thread_id, remote_ip, task))
+                continue
+
+            # 注：任务可能是文件也可能是目录
+            # 统一取上一层目录，进入后同步
+            param += " --delete --rsh=ssh %s %s@%s:%s" % (task_file, Global.G_RSYNC_USER, remote_ip, task_dir)
+            # 如果full_sync为false或者其他场景下，同步可能会因对端的目录不存在而报错
+            # 这里根据make_remote_dir配置，判断是否先登录对端创建该目录，开启会影响同步性能
+            prev_cmd = None
+            if remote_mkdir == 'true':
+                prev_cmd = "ssh %s@%s 'mkdir -p %s'" % (Global.G_RSYNC_USER, remote_ip, task_dir)
+            cmd = "cd %s && %s" % (task_dir, param)
+            if prev_cmd:
+                cmd = ';'.join([prev_cmd, cmd])
+            cmd_dict[remote_ip] = cmd
+        return cmd_dict
 
     @Counter
-    def rsync(self, param):
+    def rsync(self, cmd):
         """
         同步动作函数
 
         使用rsync同步文件或目录；
         使用Counter装饰器包装，用于计算耗时；
 
-        参数:
-            param: rsync同步命令字符串
-
         返回值:(Counter中封装)
             ret:   退出值
             detail:命令执行结构详细输出信息
         """
-        Logger.debug("[fs_slaves] exec: %s" % param)
-        ret, out, err = Common.shell_cmd(param)
+        Logger.debug("[fs_slaves] exec: %s" % cmd)
+        ret, out, err = Common.shell_cmd(cmd)
         return ret, err
 
     def doing(self, thread_id, task, is_retry):
@@ -165,23 +157,24 @@ class Slaves(Singleton):
         ret, detail = -1, None
         self.syncing.append(task)
         try:
-            param = self.combine(task)
+            cmd_dict = self.combine(thread_id, task)
             # 执行同步动作
-            ret, detail = self.rsync(param)
+            for ip, cmd in cmd_dict.items():
+                ret, detail = self.rsync(cmd)
+                detail = "To %s, %s" % (ip, detail)
         except WarnExcept as e:
             Logger.warn("[thread%s] WarnExcept %s %s" % (thread_id, task, e))
-            param = None
+            cmd_dict = None
         except ErrorExcept as e:
             Logger.error("[thread%s] ErrorExcept %s %s" % (thread_id, task, e))
-            param = None
+            cmd_dict = None
         finally:
             self.syncing.remove(task)
-        if not param:
+        if not cmd_dict:
             return
         # 0表示成功
         if not ret:
-            Logger.info("[thread%s] sync success %s, %s"
-                        % (thread_id, task, detail))
+            Logger.info("[thread%s] sync success %s, %s" % (thread_id, task, detail))
         else:
             info = "[thread%s] sync failed %s, %s" % (thread_id, task, detail)
             if is_retry:
@@ -284,16 +277,13 @@ class Slaves(Singleton):
         _tmp_ip = []
         for last in [False, True]:
             for listen in ConfigWrapper.get_listen_path(last=last):
-                ip = ConfigWrapper.get_key_value(key='remote_ip',
-                                                 section=listen,
-                                                 last=last
-                                                 )
-                if not Common.is_ip(ip):
-                    Logger.warn("[fs_slaves] IP of %s is invalid:%s, last:%s"
-                                % (listen, ip, last))
-                    continue
-                if ip not in _tmp_ip:
-                    _tmp_ip.append(ip)
+                ip_list = ConfigWrapper.get_key_value(key='remote_ip', section=listen, last=last).split(',')
+                for ip in ip_list:
+                    if not Common.is_ip(ip):
+                        Logger.warn("[fs_slaves] IP of %s is invalid:%s, last:%s" % (listen, ip, last))
+                        continue
+                    if ip not in _tmp_ip:
+                        _tmp_ip.append(ip)
         """ IP列表写入临时文件并执行fping """
         ip_list_ini = "%s/ip_list.ini" % Global.G_RUN_DIR
         check_cmd = "cat %s |sudo %s" % (ip_list_ini, Global.G_FPING_TOOL)
@@ -356,7 +346,7 @@ class Slaves(Singleton):
 
     def start_fullsync(self):
         """ 启动全量数据同步任务线程 """
-        period = int(ConfigWrapper.get_key_value('fullsync_period'))
+        period = float(ConfigWrapper.get_key_value('fullsync_period'))
         MyThreading(func=self.fully_sync,
                     period=period
                     ).start()
