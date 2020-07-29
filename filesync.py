@@ -2,7 +2,7 @@
 """
 文件同步入口
 
-本模块为文件同步的启停入口，不能被其他模块引用。
+本模块为文件同步的启停入口
 
 调用方式:
     python filesync.py [start|stop|restart|status|reload|pause|resume]
@@ -79,16 +79,11 @@ class FileSync(Daemon):
         Logger.info(StateInfo.get_state_info())
 
 
-def main():
-    if len(sys.argv) != 2:
-        usage = "Usage: %s [start|stop|restart|status|reload|pause|resume]"
-        sys.stderr.write(usage)
-        sys.exit(1)
+def interface(op_type):
     # 初始化系统环境变量
     result, err = EnvData.init()
     if not result:
-        sys.stderr.write(err)
-        sys.exit(2)
+        return result, err
     # 设置信号处理回调函数
     callback_funs = (FileSync.start_callback,
                      FileSync.stop_callback,
@@ -100,7 +95,6 @@ def main():
     # 绑定reload回调函数, fs_monitor模块中reload
     Receiver.bind(Global.G_RELOAD_MSGID, filesync.reload)
 
-    op_type = sys.argv[1]
     if op_type == 'start':
         filesync.start()
     elif op_type == 'stop':
@@ -116,8 +110,20 @@ def main():
     elif op_type == 'reload':
         filesync.reload()
     else:
-        sys.stderr.write("Unknown command %s" % op_type)
-        sys.exit(4)
+        return False, "Unknown command %s" % op_type
+    return True, None
+
+
+def main():
+    if len(sys.argv) != 2:
+        usage = "Usage: %s [start|stop|restart|status|reload|pause|resume]"
+        sys.stderr.write(usage)
+        sys.exit(1)
+
+    result, err = interface(sys.argv[1])
+    if not result:
+        sys.stderr.write(err)
+        sys.exit(2)
 
 
 if __name__ == '__main__':
