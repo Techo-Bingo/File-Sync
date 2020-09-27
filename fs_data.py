@@ -41,7 +41,8 @@ class EnvData:
                         'rsync_user',
                         'rsync_tool',
                         'fping_tool',
-                        'inotify_tool']:
+                        'inotify_tool',
+                        'so_path']:
                 if key not in ini_dict:
                     raise Exception("%s miss %s" % (Global.G_ENV_INI, key))
                 if not ini_dict[key]:
@@ -71,6 +72,10 @@ class EnvData:
             if not Common.is_file(inotify_tool):
                 raise Exception("%s is not a valid inotify tool" % inotify_tool)
             Global.G_INOTIFY_TOOL = inotify_tool
+            so_path = ini_dict['so_path']
+            if not Common.is_dir(so_path):
+                raise Exception("%s is not a valid directory path" % so_path)
+            Global.G_SO_PATH = so_path
             Common.mkdir(Global.G_LOG_DIR)
             Common.mkdir(Global.G_RUN_DIR)
         except Exception as e:
