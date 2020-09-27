@@ -110,7 +110,7 @@ class Inotify(Singleton):
         self.inotify_process = subprocess.Popen([inotify_cmd],
                                                 bufsize=10240,
                                                 stdout=subprocess.PIPE,
-                                                env={'LD_LIBRARY_PATH': Global.G_SO_PATH},
+                                                env={'LD_LIBRARY_PATH': Global.G_LIB_DIR},
                                                 shell=True)
         Logger.info("[fs_inotify] filesync pid: %s" % Common.get_pid())
         Logger.info("[fs_inotify] inotifywait pid: %s" % self._get_inotify_pid())
