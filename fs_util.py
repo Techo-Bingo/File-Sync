@@ -5,6 +5,7 @@
 本模块提供一些通用公共方法,通过第三方模块实现
 """
 import os
+import re
 import sys
 import pwd
 import time
@@ -92,13 +93,10 @@ class Common:
     """ 公共方法 """
 
     @classmethod
-    def get_abspath(cls):
-        return os.path.abspath(os.path.split(__file__)[0])
-
-    @classmethod
     def get_time(cls):
         ct = time.time()
-        return '%s.%03d' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), (ct - int(ct)) * 1000)
+        return '%s.%03d' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            (ct - int(ct)) * 1000)
 
     @classmethod
     def get_pid(cls):
@@ -122,6 +120,10 @@ class Common:
         os.chown(filename, uid, gid)
 
     @classmethod
+    def get_abspath(cls):
+        return os.path.abspath(os.path.split(__file__)[0])
+
+    @classmethod
     def dirname(cls, path):
         return os.path.split(path)[0]
 
@@ -135,7 +137,6 @@ class Common:
 
     @classmethod
     def is_ip(cls, ip):
-        import re
         p = re.compile("^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
                        "(25[0-5]|2[0-4]\d|[01]?\d\d?)$")
         return p.match(ip)
@@ -485,9 +486,6 @@ class Daemon(object):
         if self.send_signal(self.sig_status) != 1:
             self.sys_err('Not running or permission deny')
             raise SystemExit(1)
-
-
-
 
 
 
