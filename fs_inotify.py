@@ -103,17 +103,14 @@ class Inotify(Singleton):
 
     def _inotify_process(self, args=None):
         """ 开启inotifywait进程 """
-        inotify_cmd = "{0} -rmq "\
-                      "--format '%e %w%f' {1} "\
-                      "--fromfile {2}".format(
-                      Global.G_INOTIFY_TOOL,
-                      self.inotify_event,
-                      self.listen_file)
+        inotify_cmd = "{0} -rmq --format '%e %w%f' {1} --fromfile {2}".format(
+            Global.G_INOTIFY_TOOL, self.inotify_event, self.listen_file)
 
         Logger.info("[fs_inotify] start %s" % inotify_cmd)
         self.inotify_process = subprocess.Popen([inotify_cmd],
                                                 bufsize=10240,
                                                 stdout=subprocess.PIPE,
+                                                env={'LD_LIBRARY_PATH': Global.G_SO_PATH},
                                                 shell=True)
         Logger.info("[fs_inotify] filesync pid: %s" % Common.get_pid())
         Logger.info("[fs_inotify] inotifywait pid: %s" % self._get_inotify_pid())
