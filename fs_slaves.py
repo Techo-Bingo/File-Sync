@@ -124,13 +124,13 @@ class Slaves(Singleton):
 
             # 注：任务可能是文件也可能是目录
             # 统一取上一层目录，进入后同步
-            param += " --delete --rsh=ssh %s %s@%s:%s" % (task_file, Global.G_RSYNC_USER, remote_ip, task_dir)
+            _param = "%s --delete --rsh=ssh %s %s@%s:%s" % (param, task_file, Global.G_RSYNC_USER, remote_ip, task_dir)
             # 如果full_sync为false或者其他场景下，同步可能会因对端的目录不存在而报错
             # 这里根据make_remote_dir配置，判断是否先登录对端创建该目录，开启会影响同步性能
             prev_cmd = None
             if remote_mkdir == 'true':
                 prev_cmd = "ssh %s@%s 'mkdir -p %s'" % (Global.G_RSYNC_USER, remote_ip, task_dir)
-            cmd = "cd %s && %s" % (task_dir, param)
+            cmd = "cd %s && %s" % (task_dir, _param)
             if prev_cmd:
                 cmd = ';'.join([prev_cmd, cmd])
             cmd_dict[remote_ip] = cmd
@@ -162,27 +162,23 @@ class Slaves(Singleton):
             for ip, cmd in cmd_dict.items():
                 ret, detail = self.rsync(cmd)
                 detail = "To %s, %s" % (ip, detail)
+                # 0表示成功
+                if not ret:
+                    Logger.info("[thread%s] sync success %s, %s" % (thread_id, task, detail))
+                else:
+                    info = "[thread%s] sync failed %s, %s" % (thread_id, task, detail)
+                    if is_retry:
+                        Logger.error(info)
+                    else:
+                        Logger.warn(info)
+                        # 失败且不是失败重传任务时，放入失败队列进行重试
+                        RetryQueue.push_task(task)
         except WarnExcept as e:
             Logger.warn("[thread%s] WarnExcept %s %s" % (thread_id, task, e))
-            cmd_dict = None
         except ErrorExcept as e:
             Logger.error("[thread%s] ErrorExcept %s %s" % (thread_id, task, e))
-            cmd_dict = None
         finally:
             self.syncing.remove(task)
-        if not cmd_dict:
-            return
-        # 0表示成功
-        if not ret:
-            Logger.info("[thread%s] sync success %s, %s" % (thread_id, task, detail))
-        else:
-            info = "[thread%s] sync failed %s, %s" % (thread_id, task, detail)
-            if is_retry:
-                Logger.error(info)
-            else:
-                Logger.warn(info)
-                # 失败且不是失败重传任务时，放入失败队列进行重试
-                RetryQueue.push_task(task)
 
     def deal(self, thread_id, task_list, is_retry=False):
         """
