@@ -107,6 +107,7 @@ class Common:
         thread = threading.Thread(target=target, args=args)
         thread.setDaemon(True)
         thread.start()
+        return thread
 
     @classmethod
     def mkdir(cls, dirpath):
@@ -186,6 +187,19 @@ class Common:
                              shell=True)
         out, err = p.communicate()
         return p.returncode, cls.stream_2_str(out), cls.stream_2_str(err)
+
+    @classmethod
+    def batch_ping(cls, ip_list):
+        def ping(_ip):
+            ret = cls.exec_ret("ping -c 1 -W 1 {0}".format(_ip))
+            result[_ip] = True if not ret else False
+
+        result, threads = {}, []
+        for ip in ip_list:
+            threads.append(cls.start_thread(ping, (ip,)))
+        # 等待所有线程结束 #
+        [t.join() for t in threads]
+        return result
 
 
 class FileOP:
