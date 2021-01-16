@@ -40,7 +40,6 @@ class EnvData:
                         'log_trunc_period',
                         'rsync_user',
                         'rsync_tool',
-                        'fping_tool',
                         'inotify_tool',
                         'lib_dir']:
                 if key not in ini_dict:
@@ -64,10 +63,6 @@ class EnvData:
             if not Common.is_file(rsync_tool):
                 raise Exception("%s is not a valid rsync tool" % rsync_tool)
             Global.G_RSYNC_TOOL = rsync_tool
-            fping_tool = ini_dict['fping_tool']
-            if not Common.is_file(fping_tool):
-                raise Exception("%s is not a valid fping tool" % fping_tool)
-            Global.G_FPING_TOOL = fping_tool
             inotify_tool = ini_dict['inotify_tool']
             if not Common.is_file(inotify_tool):
                 raise Exception("%s is not a valid inotify tool" % inotify_tool)
