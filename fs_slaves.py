@@ -268,7 +268,6 @@ class Slaves(Singleton):
     def connect_check(self, args=None):
         """
         检验各个监听目录对应的对端IP是否可达
-        使用fping 进行批量检测
         """
         _tmp_ip = []
         for last in [False, True]:
@@ -280,16 +279,9 @@ class Slaves(Singleton):
                         continue
                     if ip not in _tmp_ip:
                         _tmp_ip.append(ip)
-        """ IP列表写入临时文件并执行fping """
-        ip_list_ini = "%s/ip_list.ini" % Global.G_RUN_DIR
-        check_cmd = "cat %s |sudo %s" % (ip_list_ini, Global.G_FPING_TOOL)
-        FileOP.write_to_file(ip_list_ini, '\n'.join(_tmp_ip))
-        out_info = Common.shell_cmd(check_cmd)[1]
-        out_list = out_info.strip().split('\n')
         """ 保存正常连接的IP """
-        for ip in _tmp_ip:
-            ok_str = '%s is alive' % ip
-            if ok_str not in out_list:
+        for ip, result in Common.batch_ping(_tmp_ip).items():
+            if not result:
                 Logger.warn('[fs_slaves] %s is disconnect' % ip)
                 if ip in self.connect_list:
                     self.connect_list.remove(ip)
