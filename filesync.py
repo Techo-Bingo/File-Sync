@@ -2,7 +2,7 @@
 """
 文件同步入口
 
-本模块为文件同步的启停入口
+本模块为文件同步的启停入口.
 
 调用方式:
     python filesync.py [start|stop|restart|status|reload|pause|resume]
@@ -92,8 +92,9 @@ def interface(op_type):
                      FileSync.reload_callback,
                      FileSync.status_callback)
     filesync = FileSync(Global.G_PID_FILE, Global.G_LOG_FILE, callback_funs)
-    # 绑定reload回调函数, fs_monitor模块中reload
+    # 绑定reload和stop回调函数, fs_monitor模块中调用
     Receiver.bind(Global.G_RELOAD_MSGID, filesync.reload)
+    Receiver.bind(Global.G_STOP_MSGID, filesync.stop)
 
     if op_type == 'start':
         filesync.start()
