@@ -470,7 +470,7 @@ class Daemon(object):
             raise SystemExit(1)
         self.start_action()
 
-    def stop(self):
+    def stop(self, param=None):
         """ 发送SIGTERM信号给pid """
         if self.send_signal(signal.SIGTERM):
             FileOP.rm_file(self.pidfile)
@@ -500,6 +500,5 @@ class Daemon(object):
         if self.send_signal(self.sig_status) != 1:
             self.sys_err('Not running or permission deny')
             raise SystemExit(1)
-
 
 
