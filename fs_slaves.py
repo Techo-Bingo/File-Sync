@@ -31,9 +31,8 @@ class Slaves(Singleton):
         self.curr_listen = None
         self.last_listen = None
         self.retry_period = 60
-        self.check_period = 60
+        self.check_period = 10
         self.worker_period = 1
-        self.connect_list = []
         self.syncing = []
         self.ready_flag = False
 
@@ -118,7 +117,7 @@ class Slaves(Singleton):
         cmd_dict = {}
         """ 判断IP是否可达 """
         for remote_ip in remote_ips:
-            if remote_ip not in self.connect_list:
+            if remote_ip not in Global.G_CONNECT_IP_LIST:
                 Logger.warn("[thread%s] %s is unavailable IP, ignore %s" % (thread_id, remote_ip, task))
                 continue
 
@@ -283,12 +282,12 @@ class Slaves(Singleton):
         for ip, result in Common.batch_ping(_tmp_ip).items():
             if not result:
                 Logger.warn('[fs_slaves] %s is disconnect' % ip)
-                if ip in self.connect_list:
-                    self.connect_list.remove(ip)
-            elif ip not in self.connect_list:
-                self.connect_list.append(ip)
+                if ip in Global.G_CONNECT_IP_LIST:
+                    Global.G_CONNECT_IP_LIST.remove(ip)
+            elif ip not in Global.G_CONNECT_IP_LIST:
+                Global.G_CONNECT_IP_LIST.append(ip)
         self.ready_flag = True
-        # Logger.debug('[fs_slaves] connect_list=%s' % self._connect_list)
+        Logger.info('[fs_slaves] after check connect G_CONNECT_IP_LIST=%s' % Global.G_CONNECT_IP_LIST)
 
     def fully_sync(self, args=None):
         """
@@ -346,7 +345,7 @@ class Slaves(Singleton):
         self.start_fullsync()
 
     def status(self):
-        return self.syncing, self.connect_list
+        return self.syncing, Global.G_CONNECT_IP_LIST
 
     def pause(self):
         if self.pool:
